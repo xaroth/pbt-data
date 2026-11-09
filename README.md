@@ -5,17 +5,23 @@ Path of Exile game data for [pbt-engine](https://github.com/xaroth/pbt-engine), 
 ## Layout
 
 ```
-index.json                          per game and league: the latest patch and the SHA-256 of its manifest.json
-<game>/<league>/                    the latest patch's dataset: manifest.json and the files it lists
-sources/<game>/<version>/           the recipe of every patch built: source.json (pbt-extract's input:
-                                    Steam depot manifest, dat-schema commit, tree export commit and hashes)
-                                    and schema.json (that dat-schema build)
-scripts/add-version.sh              writes a recipe: add-version.sh <game> <version> <steam-manifest> <dat-schema-commit> <tree-export-tag>
+index.json              per game and league: the latest patch and the SHA-256 of its manifest.json
+<game>/<league>/
+  source.json           what the league's dataset is built from (see below)
+  manifest.json, *.fb   the dataset of the latest patch
 ```
 
-`sources/*/*/schema.json` are builds of [dat-schema](https://github.com/poe-tool-dev/dat-schema), MIT licence, see [sources/LICENSE-dat-schema](sources/LICENSE-dat-schema).
-
 One dataset per league, the latest patch. Earlier patches are in git history.
+
+`source.json` is the build recipe; CI reads it to fetch and prepare pbt-extract's input:
+
+| Field | Pins |
+|---|---|
+| `version` | The game version (patch) |
+| `steamManifest` | The game files: the manifest of Steam depot 238961 (app 238960) for that patch |
+| `datSchemaCommit` | The table layout: a [dat-schema](https://github.com/poe-tool-dev/dat-schema) commit |
+| `datSchemaNote` | Optional: why `datSchemaCommit` is not the newest commit that decodes the tables |
+| `treeExportCommit` | The passive tree export: a [skilltree-export](https://github.com/grindinggear/skilltree-export) commit |
 
 ## Use
 

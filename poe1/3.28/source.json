@@ -1,0 +1,7 @@
+{
+  "version": "3.28.0.16",
+  "steamManifest": "7392830184361287422",
+  "datSchemaCommit": "717d788d6ec081821c33473b2a0ec35629144826",
+  "datSchemaNote": "Closest commit after the patch is 5818749 (2026-07-22). The tables the build reads (Stats, Characters, PassiveSkills, PassiveSkillMasteryEffects, BuffTemplates, BuffDefinitions) have the same column types and order in both; 717d788 only names four unnamed Stats bool columns.",
+  "treeExportCommit": "648e492b17d49d7213c63f4c1e0aa561617d5ad1"
+}
