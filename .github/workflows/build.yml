@@ -7,8 +7,6 @@ on:
       league:
         description: League folder under poe1/, such as 3.29
         required: true
-  push:
-    branches: [feat/build-workflow] # temporary test trigger
 
 permissions:
   contents: write
@@ -26,7 +24,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      LEAGUE: ${{ inputs.league || '3.29' }}
+      LEAGUE: ${{ inputs.league }}
     steps:
       - uses: actions/checkout@v5
 
