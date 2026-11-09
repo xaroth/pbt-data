@@ -25,9 +25,12 @@ One dataset per league, the latest patch. Earlier patches are in git history.
 
 ## Build
 
-Run the `build` workflow with a league (`gh workflow run build.yml -f league=3.29`). It reads `poe1/<league>/source.json`, downloads the bundles the build reads from Steam (depot manifest `steamManifest`, with the build account's secrets), builds `schema.json` at `datSchemaCommit`, fetches the tree export at `treeExportCommit`, runs pbt-extract at the commit pinned in the workflow (`PBT_EXTRACT`), and opens a pull request when the dataset changed. Merging it publishes.
+The `build` workflow builds datasets from `source.json`:
 
-To rebuild with a newer extractor, bump `PBT_EXTRACT` and run the workflow per league.
+- On a pull request it builds every league whose `source.json` changed, or every league when the workflow or `scripts/` changed (such as a new `PBT_EXTRACT`, the pbt-extract commit it runs), and pushes the datasets and `index.json` onto the pull request. Merging publishes recipe and data together. A rebuild that changes nothing pushes nothing.
+- Run by hand (`gh workflow run build.yml -f league=3.29`) it builds one league and opens a pull request when the dataset changed.
+
+Per league it downloads the bundles a build reads from Steam (depot manifest `steamManifest`, with the build account's secrets), builds `schema.json` at `datSchemaCommit`, fetches the tree export at `treeExportCommit` and runs pbt-extract.
 
 ## Use
 
