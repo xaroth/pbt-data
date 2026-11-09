@@ -1,6 +1,7 @@
 {
-  "version": "3.29.3.3",
-  "steamManifest": "7877769455880734114",
+  "version": "3.29.3.5",
+  "steamManifest": "2467965126630699088",
   "datSchemaCommit": "717d788d6ec081821c33473b2a0ec35629144826",
+  "datSchemaNote": "No dat-schema commit after the patch yet; 717d788 (2026-11-05) is the newest, and its row sizes for the tables the build reads match 3.29.3.5.",
   "treeExportCommit": "8bd138b32ea2631455cac5935bfab089f826094f"
 }
