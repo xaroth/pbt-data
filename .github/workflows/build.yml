@@ -1,0 +1,144 @@
+name: build
+
+# Builds the dataset of one league from its source.json and opens a pull request with it.
+on:
+  workflow_dispatch:
+    inputs:
+      league:
+        description: League folder under poe1/, such as 3.29
+        required: true
+  push:
+    branches: [feat/build-workflow] # temporary test trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  # Bump to rebuild with a newer extractor.
+  PBT_EXTRACT: 26c3822f344c659aebf37fe93d6adfafdc27a9e6
+  OOZ: ff5aeb9e45e362e8d6bb1199aa82406285dd2a18
+  DEPOT_DOWNLOADER: DepotDownloader_3.4.0
+  STEAM_APP: "238960"
+  STEAM_DEPOT: "238961"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      LEAGUE: ${{ inputs.league || '3.29' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read source.json
+        run: |
+          src=poe1/$LEAGUE/source.json
+          for f in version steamManifest datSchemaCommit treeExportCommit; do
+            v=$(jq -er ".$f" "$src")
+            echo "$f=$v" >> "$GITHUB_ENV"
+          done
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27"
+          cache: false
+
+      - name: Install pbt-extract
+        run: GOBIN="$RUNNER_TEMP/bin" go install "github.com/xaroth/pbt-extract@$PBT_EXTRACT" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Cache ooz
+        id: ooz
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ooz
+          key: ooz-${{ env.OOZ }}
+
+      - name: Build ooz
+        if: steps.ooz.outputs.cache-hit != 'true'
+        run: |
+          git clone -q https://github.com/zao/ooz "$RUNNER_TEMP/ooz-src"
+          cd "$RUNNER_TEMP/ooz-src"
+          git checkout -q "$OOZ"
+          git submodule update -q --init
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target ooz -j
+          mkdir -p "$RUNNER_TEMP/ooz" && cp build/ooz "$RUNNER_TEMP/ooz/"
+
+      - name: Install DepotDownloader
+        run: |
+          gh release download "$DEPOT_DOWNLOADER" -R SteamRE/DepotDownloader -p DepotDownloader-linux-x64.zip -D "$RUNNER_TEMP"
+          unzip -q "$RUNNER_TEMP/DepotDownloader-linux-x64.zip" -d "$RUNNER_TEMP/bin"
+          chmod +x "$RUNNER_TEMP/bin/DepotDownloader"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Schema
+        run: |
+          git clone -q --filter=blob:none https://github.com/poe-tool-dev/dat-schema "$RUNNER_TEMP/dat-schema"
+          cd "$RUNNER_TEMP/dat-schema"
+          git -c advice.detachedHead=false checkout -q "$datSchemaCommit"
+          npm ci --ignore-scripts --no-audit --no-fund --loglevel=error
+          npm exec --no -- tsc
+          node dist/cli.js > /dev/null
+          mkdir -p "$RUNNER_TEMP/in"
+          # validFor 1 is PoE1; older commits only write the combined schema.
+          node -e '
+          const fs = require("fs");
+          const s = JSON.parse(fs.readFileSync("schema.min.json", "utf8"));
+          const keep = (e) => (e.validFor & 1) !== 0;
+          fs.writeFileSync(process.argv[1], JSON.stringify({ ...s, tables: s.tables.filter(keep), enumerations: s.enumerations.filter(keep) }));
+          ' "$RUNNER_TEMP/in/schema.json"
+
+      - name: Tree export
+        run: |
+          mkdir -p "$RUNNER_TEMP/in/tree"
+          for f in data.json ruthless.json alternate.json; do
+            curl -fsSL -o "$RUNNER_TEMP/in/tree/$f" "https://raw.githubusercontent.com/grindinggear/skilltree-export/$treeExportCommit/$f"
+          done
+
+      - name: Game files
+        env:
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_PASSWORD: ${{ secrets.STEAM_PASSWORD }}
+          STEAM_SHARED_SECRET: ${{ secrets.STEAM_SHARED_SECRET }}
+        run: |
+          fetch() {
+            python3 -I scripts/steam-code.py | DepotDownloader -app "$STEAM_APP" -depot "$STEAM_DEPOT" -manifest "$steamManifest" \
+              -username "$STEAM_USERNAME" -password "$STEAM_PASSWORD" -no-mobile -filelist "$1" -dir "$RUNNER_TEMP/in"
+          }
+          echo Bundles2/_.index.bin > "$RUNNER_TEMP/index.txt"
+          fetch "$RUNNER_TEMP/index.txt"
+          pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" bundles "$RUNNER_TEMP/in" > "$RUNNER_TEMP/bundles.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/bundles.txt") bundles"
+          # A fresh code: Steam does not accept one twice.
+          sleep 31
+          fetch "$RUNNER_TEMP/bundles.txt"
+
+      - name: Dataset
+        run: |
+          pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" -version "$version" dataset "$RUNNER_TEMP/in" "$RUNNER_TEMP/out"
+          dir=poe1/$LEAGUE
+          find "$dir" -mindepth 1 -maxdepth 1 ! -name source.json -delete
+          cp "$RUNNER_TEMP"/out/* "$dir/"
+          sum=$(sha256sum "$dir/manifest.json" | cut -c1-64)
+          jq --arg l "$LEAGUE" --arg v "$version" --arg m "$sum" '.poe1[$l] = {version: $v, manifest: $m}' index.json > "$RUNNER_TEMP/index.json"
+          mv "$RUNNER_TEMP/index.json" index.json
+          echo "id $(jq -r .id "$dir/manifest.json")"
+
+      - name: Pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            echo "dataset unchanged"
+            exit 0
+          fi
+          branch=build/poe1-$LEAGUE-$version-${GITHUB_RUN_ID}
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add -A
+          git commit -qm "data: poe1 $LEAGUE at $version" -m "Built by run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID with pbt-extract $PBT_EXTRACT."
+          git push -q origin "$branch"
+          gh pr create --base main --head "$branch" --title "data: poe1 $LEAGUE at $version" \
+            --body "Built from \`poe1/$LEAGUE/source.json\` by run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID with pbt-extract \`$PBT_EXTRACT\`. Dataset id \`$(jq -r .id "poe1/$LEAGUE/manifest.json")\`."
