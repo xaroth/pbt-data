@@ -1,0 +1,49 @@
+{
+  "format": 1,
+  "game": "poe1",
+  "version": "3.27.0.10",
+  "id": "9b8246bfbce1ff7e1ae27f8ea9a3749df86c73a7d8e9caf36d329c8bee0f6e63",
+  "source": null,
+  "files": [
+    {
+      "name": "stats.fb",
+      "size": 1305440,
+      "sha256": "43cdbba24f59040f159942eac95a9a3412dfce42dea15e43ea3eeca5aae1785a"
+    },
+    {
+      "name": "characters.fb",
+      "size": 8980,
+      "sha256": "b468d6e6eb38f536b8d1173a03bd3dd773777d38b5a4d3e8a93737cea2997fea"
+    },
+    {
+      "name": "constants.fb",
+      "size": 412,
+      "sha256": "c0d37ee07610065e1cc0772f506fc3bc67f8fb7975abda143a329f1a6af8e133"
+    },
+    {
+      "name": "quests.fb",
+      "size": 2768,
+      "sha256": "576761fded959405c69e3001f78d7306360e512141d8cb8657538906384cf4b4"
+    },
+    {
+      "name": "tree-standard.fb",
+      "size": 374632,
+      "sha256": "17d1301a9a097d1ae8e2e95ab3a8bd5af58f3d032a21d2bf2792dd7c7569159b"
+    },
+    {
+      "name": "tree-ruthless.fb",
+      "size": 370424,
+      "sha256": "fc7b6cf7eb9538dde2c23a9c58fe6833f97e4af2e955970d098e70774c2c2147"
+    },
+    {
+      "name": "tree-alternate.fb",
+      "size": 373600,
+      "sha256": "d0e914569845d87c841a6e8ec47853467942ffb3d2cffe49d77c0b1de186f967"
+    },
+    {
+      "name": "text-en.fb",
+      "size": 2639664,
+      "sha256": "7e19fa49566fa6d316ef82e76cb5fe4e4c51089218555e8f9a894f4ab11f98c4"
+    }
+  ]
+}

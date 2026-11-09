@@ -5,8 +5,12 @@
       "manifest": "6541c9ae4e11581b4eed955b8f89da62665275886c86afc408974c5ff00192b3"
     },
     "3.29": {
-      "version": "3.29.3.3",
-      "manifest": "b7e411a7f8296052a147cabbd5b5a6984ee827904b86ae8d7f8f02830581133e"
+      "version": "3.29.3.5",
+      "manifest": "10960e065a5e98bef17872d313fcd99d80d180d04220a0e52114ba504ad2d2bc"
+    },
+    "3.27": {
+      "version": "3.27.0.10",
+      "manifest": "580c25070b70cdfa2c59eb4dc66ff23d655c0796db033c93af8eb2d2febb28a4"
     }
   }
 }
