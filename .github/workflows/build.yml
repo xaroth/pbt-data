@@ -56,6 +56,7 @@ jobs:
       - name: Build ooz
         if: steps.ooz.outputs.cache-hit != 'true'
         run: |
+          sudo apt-get install -y -qq libsodium-dev > /dev/null
           git clone -q https://github.com/zao/ooz "$RUNNER_TEMP/ooz-src"
           cd "$RUNNER_TEMP/ooz-src"
           git checkout -q "$OOZ"
