@@ -1,0 +1,11 @@
+pbt-data
+
+The data in this repository is derived from the game files of Path of Exile. Path of Exile and
+its game data are the property of Grinding Gear Games. This repository holds derived values
+only (stat ids, numbers, names and text), for non-commercial use; no art, audio or game files.
+The data is not licensed by the maintainers of this repository.
+
+This product isn't affiliated with or endorsed by Grinding Gear Games in any way.
+
+Rights holders who want data removed: open an issue at https://github.com/xaroth/pbt-data/issues
+or contact the repository owner through GitHub. Requests are handled promptly.
