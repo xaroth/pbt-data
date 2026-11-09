@@ -9,3 +9,6 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 
 Rights holders who want data removed: open an issue at https://github.com/xaroth/pbt-data/issues
 or contact the repository owner through GitHub. Requests are handled promptly.
+
+sources/*/*/schema.json are builds of dat-schema (https://github.com/poe-tool-dev/dat-schema),
+Copyright (c) 2021 Alexander Drozdov, MIT licence, see sources/LICENSE-dat-schema.

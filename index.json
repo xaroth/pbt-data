@@ -1,1 +1,12 @@
-{}
+{
+  "poe1": {
+    "3.28": {
+      "version": "3.28.0.16",
+      "manifest": "3286c112a46edfacfe46b4dceb71097c28d50f87ae08e15aaa9ae44fa8a7ef34"
+    },
+    "3.29": {
+      "version": "3.29.3.3",
+      "manifest": "9246f7ccb678b031b169fa628e8e028f789b054cb5262d55b0ab4a0320f9682e"
+    }
+  }
+}

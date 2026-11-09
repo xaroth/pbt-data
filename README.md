@@ -7,8 +7,13 @@ Path of Exile game data for [pbt-engine](https://github.com/xaroth/pbt-engine), 
 ```
 index.json                          per game and league: the latest patch and the SHA-256 of its manifest.json
 <game>/<league>/                    the latest patch's dataset: manifest.json and the files it lists
-sources/<game>/<version>/           the recipe of every patch built: Steam depot manifest, dat-schema build, tree export
+sources/<game>/<version>/           the recipe of every patch built: source.json (pbt-extract's input:
+                                    Steam depot manifest, dat-schema commit, tree export commit and hashes)
+                                    and schema.json (that dat-schema build)
+scripts/add-version.sh              writes a recipe: add-version.sh <game> <version> <steam-manifest> <dat-schema-commit> <tree-export-tag>
 ```
+
+`sources/*/*/schema.json` are builds of [dat-schema](https://github.com/poe-tool-dev/dat-schema), MIT licence, see [sources/LICENSE-dat-schema](sources/LICENSE-dat-schema).
 
 One dataset per league, the latest patch. Earlier patches are in git history.
 

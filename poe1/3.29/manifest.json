@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "game": "poe1",
+  "version": "3.29.3.3",
+  "id": "02d18523184806240adcca6ce2a3d2154cf4beeaf5b4741ab86d507f02b64cfc",
+  "source": {
+    "datSchemaCommit": "717d788d6ec081821c33473b2a0ec35629144826",
+    "steamManifest": "7877769455880734114",
+    "treeExport": "3.29.1",
+    "treeExport/alternate.json": "c18a5383151fedd6cce7b0aff89bc3e8632db076d03098cb6d4d52fc298dc32a",
+    "treeExport/data.json": "7e9f755e33152129ebf36c2ebdad639c527e4ad70d274b1fefb860f30ca01122",
+    "treeExport/ruthless.json": "cedacd247611385a1fcc82959c73eb74b82a62e4c9875244dfa030947e65483b",
+    "treeExportCommit": "8bd138b32ea2631455cac5935bfab089f826094f"
+  },
+  "files": [
+    {
+      "name": "stats.fb",
+      "size": 1382580,
+      "sha256": "f1c9c8cf0fedf651b4ce535c4479a2388f00b4586662f2514b26cc5e317c9c82"
+    },
+    {
+      "name": "characters.fb",
+      "size": 9316,
+      "sha256": "9fd3a346d361660107e81e4918339d0429f506415ee31411c32bdff36c0ec1fd"
+    },
+    {
+      "name": "constants.fb",
+      "size": 412,
+      "sha256": "c0d37ee07610065e1cc0772f506fc3bc67f8fb7975abda143a329f1a6af8e133"
+    },
+    {
+      "name": "quests.fb",
+      "size": 2768,
+      "sha256": "576761fded959405c69e3001f78d7306360e512141d8cb8657538906384cf4b4"
+    },
+    {
+      "name": "tree-standard.fb",
+      "size": 389892,
+      "sha256": "7c238e9902210477a228a144186db8ddc10ab15cc3e490306cfbb68650c552fc"
+    },
+    {
+      "name": "tree-ruthless.fb",
+      "size": 385896,
+      "sha256": "e4db4471792cc4f0e4e93e25c14227cc7d609168562a371a3b58d33666d9c72a"
+    },
+    {
+      "name": "tree-alternate.fb",
+      "size": 375884,
+      "sha256": "34d220edbe478f47cf09c9c7f399222b5dfa938bbd7ef312463a5f18de2f6cd2"
+    },
+    {
+      "name": "text-en.fb",
+      "size": 2745600,
+      "sha256": "4c9e323a1aac5cc9f2fa52643e9f1a02045bf1307d266cf91dd3aa157138ca7c"
+    }
+  ]
+}
