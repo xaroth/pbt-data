@@ -40,8 +40,10 @@ jobs:
     outputs:
       leagues: ${{ steps.list.outputs.leagues }}
     steps:
+      # The pull request's own commit, not its merge with main: publish writes into the branch.
       - uses: actions/checkout@v5
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - id: list
         env:
@@ -52,7 +54,8 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             leagues=$INPUT_LEAGUE
           else
-            changed=$(git diff --name-only "$BASE" "$HEAD")
+            # Since the branch left main, so main's later changes are not counted.
+            changed=$(git diff --name-only "$BASE...$HEAD")
             if grep -qE '^(\.github/workflows/build\.yml|scripts/)' <<< "$changed"; then
               leagues=$(ls poe1/*/source.json | cut -d/ -f2)
             else
@@ -77,6 +80,8 @@ jobs:
       LEAGUE: ${{ matrix.league }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Read source.json
         run: |
