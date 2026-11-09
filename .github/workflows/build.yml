@@ -41,7 +41,7 @@ jobs:
       leagues: ${{ steps.list.outputs.leagues }}
     steps:
       # The pull request's own commit, not its merge with main: publish writes into the branch.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
@@ -79,7 +79,7 @@ jobs:
     env:
       LEAGUE: ${{ matrix.league }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
@@ -91,7 +91,7 @@ jobs:
             echo "$f=$v" >> "$GITHUB_ENV"
           done
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: false
@@ -101,7 +101,7 @@ jobs:
 
       - name: Cache ooz
         id: ooz
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/ooz
           key: ooz-${{ env.OOZ }}
@@ -173,7 +173,7 @@ jobs:
           pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" -version "$version" dataset "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE"
           echo "id $(jq -r .id "$RUNNER_TEMP/out/$LEAGUE/manifest.json")"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dataset-${{ matrix.league }}
           path: ${{ runner.temp }}/out
@@ -183,11 +183,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref || github.ref }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: dataset-*
           merge-multiple: true
