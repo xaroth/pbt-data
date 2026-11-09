@@ -1,0 +1,233 @@
+name: build
+
+# Builds league datasets from their source.json. On a pull request it builds every league whose
+# source.json changed, or every league when this workflow or its scripts changed (such as a new
+# PBT_EXTRACT), and pushes the datasets onto the pull request. Run by hand, it builds one league
+# and opens a pull request.
+on:
+  pull_request:
+    paths:
+      - poe1/*/source.json
+      - .github/workflows/build.yml
+      - scripts/**
+  workflow_dispatch:
+    inputs:
+      league:
+        description: League folder under poe1/, such as 3.29
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  # Bump to rebuild every league with a newer extractor.
+  PBT_EXTRACT: 26c3822f344c659aebf37fe93d6adfafdc27a9e6
+  OOZ: ff5aeb9e45e362e8d6bb1199aa82406285dd2a18
+  DEPOT_DOWNLOADER: DepotDownloader_3.4.0
+  STEAM_APP: "238960"
+  STEAM_DEPOT: "238961"
+
+jobs:
+  leagues:
+    # Pull requests from forks get no secrets.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      leagues: ${{ steps.list.outputs.leagues }}
+    steps:
+      # The pull request's own commit, not its merge with main: publish writes into the branch.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - id: list
+        env:
+          INPUT_LEAGUE: ${{ inputs.league }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            leagues=$INPUT_LEAGUE
+          else
+            # Since the branch left main, so main's later changes are not counted.
+            changed=$(git diff --name-only "$BASE...$HEAD")
+            if grep -qE '^(\.github/workflows/build\.yml|scripts/)' <<< "$changed"; then
+              leagues=$(ls poe1/*/source.json | cut -d/ -f2)
+            else
+              leagues=$(grep -E '^poe1/[^/]+/source\.json$' <<< "$changed" | while read -r f; do [ -f "$f" ] && echo "$f"; done | cut -d/ -f2)
+            fi
+          fi
+          json=$(printf '%s\n' $leagues | jq -Rnc '[inputs | select(length > 0)]')
+          echo "leagues: $json"
+          echo "leagues=$json" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: leagues
+    if: needs.leagues.outputs.leagues != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # One Steam login at a time.
+      max-parallel: 1
+      matrix:
+        league: ${{ fromJSON(needs.leagues.outputs.leagues) }}
+    env:
+      LEAGUE: ${{ matrix.league }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Read source.json
+        run: |
+          src=poe1/$LEAGUE/source.json
+          for f in version steamManifest datSchemaCommit treeExportCommit; do
+            v=$(jq -er ".$f" "$src")
+            echo "$f=$v" >> "$GITHUB_ENV"
+          done
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          cache: false
+
+      - name: Install pbt-extract
+        run: GOBIN="$RUNNER_TEMP/bin" go install "github.com/xaroth/pbt-extract@$PBT_EXTRACT" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Cache ooz
+        id: ooz
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/ooz
+          key: ooz-${{ env.OOZ }}
+
+      - name: Build ooz
+        if: steps.ooz.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y -qq libsodium-dev > /dev/null
+          git clone -q https://github.com/zao/ooz "$RUNNER_TEMP/ooz-src"
+          cd "$RUNNER_TEMP/ooz-src"
+          git checkout -q "$OOZ"
+          git submodule update -q --init
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target ooz -j
+          mkdir -p "$RUNNER_TEMP/ooz" && cp build/ooz "$RUNNER_TEMP/ooz/"
+
+      - name: Install DepotDownloader
+        run: |
+          gh release download "$DEPOT_DOWNLOADER" -R SteamRE/DepotDownloader -p DepotDownloader-linux-x64.zip -D "$RUNNER_TEMP"
+          unzip -q "$RUNNER_TEMP/DepotDownloader-linux-x64.zip" -d "$RUNNER_TEMP/bin"
+          chmod +x "$RUNNER_TEMP/bin/DepotDownloader"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Schema
+        run: |
+          git clone -q --filter=blob:none https://github.com/poe-tool-dev/dat-schema "$RUNNER_TEMP/dat-schema"
+          cd "$RUNNER_TEMP/dat-schema"
+          git -c advice.detachedHead=false checkout -q "$datSchemaCommit"
+          npm ci --ignore-scripts --no-audit --no-fund --loglevel=error
+          npm exec --no -- tsc
+          node dist/cli.js > /dev/null
+          mkdir -p "$RUNNER_TEMP/in"
+          # validFor 1 is PoE1; older commits only write the combined schema.
+          node -e '
+          const fs = require("fs");
+          const s = JSON.parse(fs.readFileSync("schema.min.json", "utf8"));
+          const keep = (e) => (e.validFor & 1) !== 0;
+          fs.writeFileSync(process.argv[1], JSON.stringify({ ...s, tables: s.tables.filter(keep), enumerations: s.enumerations.filter(keep) }));
+          ' "$RUNNER_TEMP/in/schema.json"
+
+      - name: Tree export
+        run: |
+          mkdir -p "$RUNNER_TEMP/in/tree"
+          for f in data.json ruthless.json alternate.json; do
+            curl -fsSL -o "$RUNNER_TEMP/in/tree/$f" "https://raw.githubusercontent.com/grindinggear/skilltree-export/$treeExportCommit/$f"
+          done
+
+      - name: Game files
+        env:
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_PASSWORD: ${{ secrets.STEAM_PASSWORD }}
+          STEAM_SHARED_SECRET: ${{ secrets.STEAM_SHARED_SECRET }}
+        run: |
+          fetch() {
+            python3 -I scripts/steam-code.py | DepotDownloader -app "$STEAM_APP" -depot "$STEAM_DEPOT" -manifest "$steamManifest" \
+              -username "$STEAM_USERNAME" -password "$STEAM_PASSWORD" -no-mobile -filelist "$1" -dir "$RUNNER_TEMP/in"
+          }
+          echo Bundles2/_.index.bin > "$RUNNER_TEMP/index.txt"
+          fetch "$RUNNER_TEMP/index.txt"
+          pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" bundles "$RUNNER_TEMP/in" > "$RUNNER_TEMP/bundles.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/bundles.txt") bundles"
+          # A fresh code: Steam does not accept one twice.
+          sleep 31
+          fetch "$RUNNER_TEMP/bundles.txt"
+
+      - name: Dataset
+        run: |
+          pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" -version "$version" dataset "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE"
+          echo "id $(jq -r .id "$RUNNER_TEMP/out/$LEAGUE/manifest.json")"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dataset-${{ matrix.league }}
+          path: ${{ runner.temp }}/out
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dataset-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/out
+
+      - name: Update league folders and index.json
+        run: |
+          for d in "$RUNNER_TEMP"/out/*/; do
+            league=$(basename "$d")
+            dir=poe1/$league
+            find "$dir" -mindepth 1 -maxdepth 1 ! -name source.json -delete
+            cp "$d"* "$dir/"
+            version=$(jq -r .version "$dir/manifest.json")
+            sum=$(sha256sum "$dir/manifest.json" | cut -c1-64)
+            jq --arg l "$league" --arg v "$version" --arg m "$sum" '.poe1[$l] = {version: $v, manifest: $m}' index.json > "$RUNNER_TEMP/index.json"
+            mv "$RUNNER_TEMP/index.json" index.json
+            echo "$league: $version, id $(jq -r .id "$dir/manifest.json")"
+          done
+          git status --short
+
+      - name: Commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LEAGUE: ${{ inputs.league }}
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "datasets unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            git commit -qm "data: rebuild from source.json" -m "Built by $run with pbt-extract $PBT_EXTRACT."
+            git push -q
+          else
+            branch=build/poe1-$LEAGUE-$GITHUB_RUN_ID
+            git checkout -q -b "$branch"
+            git commit -qm "data: rebuild poe1 $LEAGUE" -m "Built by $run with pbt-extract $PBT_EXTRACT."
+            git push -q origin "$branch"
+            gh pr create --base main --head "$branch" --title "data: rebuild poe1 $LEAGUE" --body "Built from \`poe1/$LEAGUE/source.json\` by $run with pbt-extract \`$PBT_EXTRACT\`."
+          fi
