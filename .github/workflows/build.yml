@@ -1,7 +1,7 @@
 name: build
 
 # Builds league datasets from their source.json. On a pull request it builds every league whose
-# source.json changed, or every league when this workflow or its scripts changed (such as a new
+# source.json changed, or every league when this workflow or the Steam login changed (such as a new
 # PBT_EXTRACT), and pushes the datasets onto the pull request. Run by hand, it builds one league
 # and opens a pull request.
 on:
@@ -9,7 +9,7 @@ on:
     paths:
       - poe1/*/source.json
       - .github/workflows/build.yml
-      - scripts/**
+      - scripts/steam-code.py
   workflow_dispatch:
     inputs:
       league:
@@ -56,7 +56,7 @@ jobs:
           else
             # Since the branch left main, so main's later changes are not counted.
             changed=$(git diff --name-only "$BASE...$HEAD")
-            if grep -qE '^(\.github/workflows/build\.yml|scripts/)' <<< "$changed"; then
+            if grep -qE '^(\.github/workflows/build\.yml|scripts/steam-code\.py)$' <<< "$changed"; then
               leagues=$(ls poe1/*/source.json | cut -d/ -f2)
             else
               leagues=$(grep -E '^poe1/[^/]+/source\.json$' <<< "$changed" | while read -r f; do [ -f "$f" ] && echo "$f"; done | cut -d/ -f2)
