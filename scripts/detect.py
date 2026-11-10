@@ -5,11 +5,12 @@ Reads the latest game version (poe-tool-dev/latest-patch-version), the public St
 league's open detect pull request, the newest dat-schema commit and the skilltree-export tags.
 When a recipe should change it writes it to --out and reports, as GitHub outputs:
 
-    action   none, new (first recipe of a league), update (new patch) or retry (newer dat-schema
-             for a failed build)
+    action   none, new (first recipe of a league), update (new patch), retry (newer dat-schema
+             for a failed build) or rerun (rerun a failed build once, its recipe unchanged)
     league   the league, such as 3.29
     branch   detect/poe1-<league>
     pr       the open pull request's number, empty when none
+    run      the build run to rerun, for rerun
     title    a commit and pull request title
 
 Every run logs why it did what it did. Failures to read a source exit non-zero.
@@ -46,6 +47,8 @@ class PR:
     recipe: dict
     # Conclusion of the branch's latest build run: success, failure, pending, other or none.
     build: str
+    run: int = 0
+    attempt: int = 0
 
 
 @dataclass(frozen=True)
@@ -65,6 +68,7 @@ class Decision:
     reason: str
     recipe: dict | None = None
     title: str = ""
+    run: int = 0
 
 
 def version_key(v: str) -> tuple:
@@ -107,7 +111,10 @@ def decide(s: State) -> Decision:
         if not s.pr or s.pr.build != "failure":
             return Decision("none", league, reason)
         if s.dat_schema == current["datSchemaCommit"]:
-            return Decision("none", league, f"build of #{s.pr.number} failed; waiting for a dat-schema commit after {s.dat_schema[:7]}")
+            # A failure need not be the schema (Steam, network, runner): rerun once before waiting.
+            if s.pr.attempt < 2:
+                return Decision("rerun", league, f"build of #{s.pr.number} failed on the newest dat-schema; rerunning it once", run=s.pr.run)
+            return Decision("none", league, f"build of #{s.pr.number} failed again; waiting for a dat-schema commit after {s.dat_schema[:7]}")
         recipe = {**current, "datSchemaCommit": s.dat_schema}
         recipe.pop("datSchemaNote", None)
         return Decision("retry", league, f"build of #{s.pr.number} failed; retrying with dat-schema {s.dat_schema[:7]}",
@@ -194,7 +201,7 @@ def read_state(get: Get, root: Path, repo: str, app_info: str) -> State:
         path = f"{GAME}/{league_of(version)}/source.json"
         recipe = get_json(get, f"{API}/repos/{repo}/contents/{path}?ref={branch}")
         runs = get_json(get, f"{API}/repos/{repo}/actions/workflows/{BUILD_WORKFLOW}/runs?branch={branch}&per_page=1")["workflow_runs"]
-        pr = PR(number, recipe, build_state(runs[0]) if runs else "none")
+        pr = PR(number, recipe, build_state(runs[0]), runs[0]["id"], runs[0]["run_attempt"]) if runs else PR(number, recipe, "none")
     dat_schema = get_json(get, f"{API}/repos/{DAT_SCHEMA}/commits?per_page=1")[0]["sha"]
     tags = []
     for page in range(1, 20):
@@ -230,6 +237,7 @@ def main(argv: list, get: Get = http_get) -> int:
         "branch": f"detect/{GAME}-{d.league}",
         "pr": str(state.pr.number) if state.pr else "",
         "title": d.title,
+        "run": str(d.run or ""),
     }
     if path := os.environ.get("GITHUB_OUTPUT"):
         with open(path, "a") as f:

@@ -132,7 +132,13 @@ class TestDecide(unittest.TestCase):
         d = self.check(state(version="3.29.3.6", manifest="111", pr=failed, dat_schema="bbbbbbbbb"), "retry",
                        {**pr_recipe, "datSchemaCommit": "bbbbbbbbb"})
         self.assertEqual(d.title, "poe1 3.29: 3.29.3.6, dat-schema bbbbbbb")
-        self.check(state(version="3.29.3.6", manifest="111", pr=failed), "none", reason="waiting for a dat-schema commit after 717d788")
+        d = self.check(state(version="3.29.3.6", manifest="111", pr=failed), "rerun", reason="rerunning it once")
+        self.assertEqual(d.run, 0)
+        rerun = detect.PR(7, pr_recipe, "failure", run=99, attempt=1)
+        self.assertEqual(detect.decide(state(version="3.29.3.6", manifest="111", pr=rerun)).run, 99)
+        again = detect.PR(7, pr_recipe, "failure", run=99, attempt=2)
+        self.check(state(version="3.29.3.6", manifest="111", pr=again), "none", reason="failed again; waiting for a dat-schema commit after 717d788")
+        self.check(state(version="3.29.3.6", manifest="111", pr=again, dat_schema="bbbbbbb"), "retry")
         for build in ("success", "pending", "other", "none"):
             with self.subTest(build=build):
                 self.check(state(version="3.29.3.6", manifest="111", pr=detect.PR(7, pr_recipe, build), dat_schema="bbbbbbb"), "none")
@@ -166,7 +172,7 @@ class TestMain(unittest.TestCase):
         return dict(line.split("=", 1) for line in out.read_text().splitlines())
 
     def test_update(self):
-        self.assertEqual(self.run_main(), {"action": "update", "league": "3.29", "branch": "detect/poe1-3.29", "pr": "", "title": "poe1 3.29: 3.29.3.6"})
+        self.assertEqual(self.run_main(), {"action": "update", "league": "3.29", "branch": "detect/poe1-3.29", "pr": "", "title": "poe1 3.29: 3.29.3.6", "run": ""})
         self.assertEqual((self.dir / "source.json").read_text(), json.dumps(
             {"version": "3.29.3.6", "steamManifest": "111", "datSchemaCommit": "abcdef0123", "treeExportCommit": "8bd138b"}, indent=2) + "\n")
 
@@ -177,11 +183,25 @@ class TestMain(unittest.TestCase):
             f"{api}/repos/xaroth/pbt-data/pulls?state=open&head=xaroth:detect/poe1-3.29": b'[{"number": 12}]',
             f"{api}/repos/xaroth/pbt-data/contents/poe1/3.29/source.json?ref=detect/poe1-3.29": json.dumps(branch_recipe).encode(),
             f"{api}/repos/xaroth/pbt-data/actions/workflows/build.yml/runs?branch=detect/poe1-3.29&per_page=1":
-                b'{"workflow_runs": [{"status": "completed", "conclusion": "failure"}]}',
+                b'{"workflow_runs": [{"id": 42, "run_attempt": 1, "status": "completed", "conclusion": "failure"}]}',
         }
         got = self.run_main()
-        self.assertEqual((got["action"], got["pr"]), ("retry", "12"))
+        self.assertEqual((got["action"], got["pr"], got["run"]), ("retry", "12", ""))
         self.assertEqual(json.loads((self.dir / "source.json").read_text())["datSchemaCommit"], "abcdef0123")
+
+    def test_rerun_on_open_pr(self):
+        api = detect.API
+        self.responses |= {
+            f"{api}/repos/poe-tool-dev/dat-schema/commits?per_page=1": b'[{"sha": "717d788"}]',
+            f"{api}/repos/xaroth/pbt-data/pulls?state=open&head=xaroth:detect/poe1-3.29": b'[{"number": 12}]',
+            f"{api}/repos/xaroth/pbt-data/contents/poe1/3.29/source.json?ref=detect/poe1-3.29":
+                json.dumps({**R329, "version": "3.29.3.6", "steamManifest": "111"}).encode(),
+            f"{api}/repos/xaroth/pbt-data/actions/workflows/build.yml/runs?branch=detect/poe1-3.29&per_page=1":
+                b'{"workflow_runs": [{"id": 42, "run_attempt": 1, "status": "completed", "conclusion": "failure"}]}',
+        }
+        got = self.run_main()
+        self.assertEqual((got["action"], got["run"]), ("rerun", "42"))
+        self.assertFalse((self.dir / "source.json").exists())
 
     def test_bad_version(self):
         self.responses[detect.LATEST_URL] = b"<html>"
