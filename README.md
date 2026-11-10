@@ -30,7 +30,7 @@ The `build` workflow builds datasets from `source.json`:
 - On a pull request it builds every league whose `source.json` changed, or every league when the workflow or `scripts/steam-code.py` changed (such as a new `PBT_EXTRACT`, the pbt-extract commit it runs), and pushes the datasets and `index.json` onto the pull request. Merging publishes recipe and data together. A rebuild that changes nothing pushes nothing.
 - Run by hand (`gh workflow run build.yml -f league=3.29`) it builds one league and opens a pull request when the dataset changed.
 
-Per league it downloads the bundles a build reads from Steam (depot manifest `steamManifest`, with the build account's secrets), builds `schema.json` at `datSchemaCommit`, fetches the tree export at `treeExportCommit` and runs pbt-extract.
+Per league it downloads the bundles a build reads: from the CDN (`patch.poecdn.com/<version>/`, no login) when it still serves the version, which it does only for the live patch; otherwise, or when a CDN download fails partway, from Steam (depot manifest `steamManifest`, with the build account's secrets). It then builds `schema.json` at `datSchemaCommit`, fetches the tree export at `treeExportCommit` and runs pbt-extract.
 
 ## Detect
 
