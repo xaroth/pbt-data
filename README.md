@@ -38,7 +38,7 @@ The `detect` workflow runs hourly (and by hand with `gh workflow run detect.yml`
 
 - A new patch with a new Steam manifest: writes the league's `source.json` (newest dat-schema commit, newest skilltree-export tag of the league) and pushes it to `detect/poe1-<league>`, opening its pull request when none is open. `build` then adds the dataset.
 - A new version whose Steam manifest has not changed yet, or a new league without a skilltree-export tag: waits for the next run.
-- The pull request's build failed and dat-schema has a newer commit: moves `datSchemaCommit` to it, which builds again.
+- The pull request's build failed: moves `datSchemaCommit` to a newer dat-schema commit when there is one, which builds again. Otherwise reruns the build once, since the cause may be Steam or the network, then waits for a newer dat-schema commit.
 
 It pushes with the `xaroth-actions-helper` App (`APP_ID`, `APP_PRIVATE_KEY`), so `build` runs on its pushes. Nothing merges automatically. On a pull request that changes detection it runs without pushing.
 

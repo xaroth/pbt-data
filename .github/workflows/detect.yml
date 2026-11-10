@@ -13,11 +13,11 @@ on:
       - .github/workflows/detect.yml
       - scripts/detect.py
 
-# Reads only; writes use the App's token.
+# Reads, and rerunning a failed build; pushes and pull requests use the App's token.
 permissions:
   contents: read
   pull-requests: read
-  actions: read
+  actions: write
 
 concurrency:
   group: detect-${{ github.event.pull_request.number || 'main' }}
@@ -75,8 +75,19 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 -I scripts/detect.py --app-info "$RUNNER_TEMP/app-info.txt" --out "$RUNNER_TEMP/source.json"
 
+      - name: Rerun the failed build
+        if: steps.detect.outputs.action == 'rerun' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ steps.detect.outputs.run }}
+          PR: ${{ steps.detect.outputs.pr }}
+          APP_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          gh run rerun "$RUN" --failed
+          GH_TOKEN=$APP_TOKEN gh pr comment "$PR" --body "The build failed on the newest dat-schema commit; rerunning it once ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$RUN)."
+
       - name: Push and open the pull request
-        if: steps.detect.outputs.action != 'none' && github.event_name != 'pull_request'
+        if: contains(fromJSON('["new", "update", "retry"]'), steps.detect.outputs.action) && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           SLUG: ${{ steps.app.outputs.app-slug }}
