@@ -32,6 +32,16 @@ The `build` workflow builds datasets from `source.json`:
 
 Per league it downloads the bundles a build reads from Steam (depot manifest `steamManifest`, with the build account's secrets), builds `schema.json` at `datSchemaCommit`, fetches the tree export at `treeExportCommit` and runs pbt-extract.
 
+## Detect
+
+The `detect` workflow runs hourly (and by hand with `gh workflow run detect.yml`). `scripts/detect.py` compares the latest game version ([latest-patch-version](https://github.com/poe-tool-dev/latest-patch-version)) and Steam's public manifest with the recipes and the league's open `detect/poe1-<league>` pull request:
+
+- A new patch with a new Steam manifest: writes the league's `source.json` (newest dat-schema commit, newest skilltree-export tag of the league) and pushes it to `detect/poe1-<league>`, opening its pull request when none is open. `build` then adds the dataset.
+- A new version whose Steam manifest has not changed yet, or a new league without a skilltree-export tag: waits for the next run.
+- The pull request's build failed and dat-schema has a newer commit: moves `datSchemaCommit` to it, which builds again.
+
+It pushes with the `xaroth-actions-helper` App (`APP_ID`, `APP_PRIVATE_KEY`), so `build` runs on its pushes. Nothing merges automatically. On a pull request that changes detection it runs without pushing.
+
 ## Use
 
 Read `index.json`. When a league's manifest hash differs from your copy, download its `manifest.json`, check it against that hash, then download the files whose SHA-256 differs from yours. `pbt data pull` in pbt-engine does this.

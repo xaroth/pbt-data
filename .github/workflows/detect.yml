@@ -1,0 +1,114 @@
+name: detect
+
+# Hourly: checks for a new game patch with scripts/detect.py and pushes the league's new
+# source.json to detect/poe1-<league>, opening its pull request when none is open. Pushed with
+# the App's token, so build runs on it as on any pull request; merging publishes. On a pull
+# request that changes detection it runs the same checks without pushing.
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/detect.yml
+      - scripts/detect.py
+
+# Reads only; writes use the App's token.
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: detect-${{ github.event.pull_request.number || 'main' }}
+
+env:
+  STEAM_APP: "238960"
+
+jobs:
+  detect:
+    # Pull requests from forks get no secrets.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - id: app
+        if: github.event_name != 'pull_request'
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app.outputs.token || github.token }}
+          fetch-depth: 0
+
+      # steamcmd updates itself on start; a weekly cache keeps that update small.
+      - id: week
+        run: echo "week=$(date +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache steamcmd
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/steamcmd
+          key: steamcmd-${{ steps.week.outputs.week }}
+          restore-keys: steamcmd-
+
+      - name: Steam app info
+        env:
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_PASSWORD: ${{ secrets.STEAM_PASSWORD }}
+          STEAM_SHARED_SECRET: ${{ secrets.STEAM_SHARED_SECRET }}
+        run: |
+          sudo apt-get install -y -qq lib32gcc-s1 > /dev/null
+          dir=$RUNNER_TEMP/steamcmd
+          if [ ! -x "$dir/steamcmd.sh" ]; then
+            mkdir -p "$dir"
+            curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar xz -C "$dir"
+          fi
+          code=$(python3 -I scripts/steam-code.py)
+          "$dir/steamcmd.sh" +login "$STEAM_USERNAME" "$STEAM_PASSWORD" "$code" \
+            +app_info_update 1 +app_info_print "$STEAM_APP" +logoff +quit > "$RUNNER_TEMP/app-info.txt" || true
+          grep -E '^(Logging in|Waiting|AppID|ERROR|FAILED)' "$RUNNER_TEMP/app-info.txt" || true
+
+      - id: detect
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -I scripts/detect.py --app-info "$RUNNER_TEMP/app-info.txt" --out "$RUNNER_TEMP/source.json"
+
+      - name: Push and open the pull request
+        if: steps.detect.outputs.action != 'none' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SLUG: ${{ steps.app.outputs.app-slug }}
+          ACTION: ${{ steps.detect.outputs.action }}
+          LEAGUE: ${{ steps.detect.outputs.league }}
+          BRANCH: ${{ steps.detect.outputs.branch }}
+          PR: ${{ steps.detect.outputs.pr }}
+          TITLE: "data: ${{ steps.detect.outputs.title }}"
+        run: |
+          id=$(gh api "/users/$SLUG%5Bbot%5D" --jq .id)
+          git config user.name "$SLUG[bot]"
+          git config user.email "$id+$SLUG[bot]@users.noreply.github.com"
+          run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          if [ -n "$PR" ]; then
+            git checkout -q -B "$BRANCH" "origin/$BRANCH"
+          else
+            # A branch left by a closed pull request is replaced.
+            git checkout -q -B "$BRANCH" origin/main
+          fi
+          mkdir -p "poe1/$LEAGUE"
+          cp "$RUNNER_TEMP/source.json" "poe1/$LEAGUE/source.json"
+          git add "poe1/$LEAGUE/source.json"
+          git commit -qm "$TITLE" -m "Detected by $run."
+          if [ -n "$PR" ]; then
+            git push -q origin "$BRANCH"
+            if [ "$ACTION" = retry ]; then
+              gh pr comment "$PR" --body "The last build failed; retrying with dat-schema \`$(jq -r .datSchemaCommit "poe1/$LEAGUE/source.json")\` ($run)."
+            else
+              gh pr edit "$PR" --title "$TITLE"
+            fi
+          else
+            git push -qf origin "$BRANCH"
+            gh pr create --base main --head "$BRANCH" --title "$TITLE" \
+              --body "Detected by $run. \`build\` adds the dataset to this pull request; merging publishes it."
+          fi
