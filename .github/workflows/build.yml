@@ -150,38 +150,77 @@ jobs:
             curl -fsSL -o "$RUNNER_TEMP/in/tree/$f" "https://raw.githubusercontent.com/grindinggear/skilltree-export/$treeExportCommit/$f"
           done
 
+      # The CDN serves the live patch without a login; Steam serves any patch by manifest id.
       - name: Game files
         env:
           STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
           STEAM_PASSWORD: ${{ secrets.STEAM_PASSWORD }}
           STEAM_SHARED_SECRET: ${{ secrets.STEAM_SHARED_SECRET }}
         run: |
-          # A code is accepted once; detect or another build may have used the current one, so a
-          # failed attempt retries with the next.
-          fetch() {
+          in=$RUNNER_TEMP/in
+          cdn=https://patch.poecdn.com/$version
+          bundles() {
+            pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" bundles "$in" > "$RUNNER_TEMP/bundles.txt"
+            echo "$(wc -l < "$RUNNER_TEMP/bundles.txt") bundles"
+          }
+          # A code is accepted once; another build may have used the current one, so a failed
+          # attempt retries with the next.
+          steam() {
             for attempt in 1 2 3; do
               python3 -I scripts/steam-code.py | DepotDownloader -app "$STEAM_APP" -depot "$STEAM_DEPOT" -manifest "$steamManifest" \
-                -username "$STEAM_USERNAME" -password "$STEAM_PASSWORD" -no-mobile -filelist "$1" -dir "$RUNNER_TEMP/in" && return
+                -username "$STEAM_USERNAME" -password "$STEAM_PASSWORD" -no-mobile -filelist "$1" -dir "$in" && return
               [ "$attempt" = 3 ] || { echo "attempt $attempt failed; retrying with a fresh code"; sleep 31; }
             done
             return 1
           }
-          echo Bundles2/_.index.bin > "$RUNNER_TEMP/index.txt"
-          fetch "$RUNNER_TEMP/index.txt"
-          pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" bundles "$RUNNER_TEMP/in" > "$RUNNER_TEMP/bundles.txt"
-          echo "$(wc -l < "$RUNNER_TEMP/bundles.txt") bundles"
-          sleep 31
-          fetch "$RUNNER_TEMP/bundles.txt"
+          from_steam() {
+            rm -rf "$in/Bundles2"
+            echo Bundles2/_.index.bin > "$RUNNER_TEMP/index.txt"
+            steam "$RUNNER_TEMP/index.txt"
+            bundles
+            sleep 31
+            steam "$RUNNER_TEMP/bundles.txt"
+            echo "fetched=Steam manifest $steamManifest" >> "$GITHUB_ENV"
+          }
+          mkdir -p "$in/Bundles2"
+          status=$(curl -sS --retry 3 -o "$in/Bundles2/_.index.bin" -w '%{http_code}' "$cdn/Bundles2/_.index.bin")
+          case $status in
+            200)
+              bundles
+              if xargs -P 8 -I{} curl -fsS --retry 3 --create-dirs -o "$in/{}" "$cdn/{}" < "$RUNNER_TEMP/bundles.txt"; then
+                echo "fetched=CDN $cdn" >> "$GITHUB_ENV"
+              else
+                echo "CDN download failed partway; starting over from Steam"
+                from_steam
+              fi
+              ;;
+            404)
+              echo "$version is not on the CDN; using Steam"
+              from_steam
+              ;;
+            *)
+              echo "CDN returned $status for $cdn/Bundles2/_.index.bin"
+              exit 1
+              ;;
+          esac
 
       - name: Dataset
         run: |
           pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" -version "$version" dataset "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE"
-          echo "id $(jq -r .id "$RUNNER_TEMP/out/$LEAGUE/manifest.json")"
+          id=$(jq -r .id "$RUNNER_TEMP/out/$LEAGUE/manifest.json")
+          echo "id $id, game files from $fetched"
+          echo "$LEAGUE: $version from $fetched, id \`$id\`" | tee -a "$GITHUB_STEP_SUMMARY" > "$RUNNER_TEMP/fetched-$LEAGUE.txt"
 
       - uses: actions/upload-artifact@v7
         with:
           name: dataset-${{ matrix.league }}
           path: ${{ runner.temp }}/out
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fetched-${{ matrix.league }}
+          path: ${{ runner.temp }}/fetched-${{ matrix.league }}.txt
           retention-days: 7
 
   publish:
@@ -197,6 +236,12 @@ jobs:
           pattern: dataset-*
           merge-multiple: true
           path: ${{ runner.temp }}/out
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: fetched-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/fetched
 
       - name: Update league folders and index.json
         run: |
@@ -227,12 +272,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            git commit -qm "data: rebuild from source.json" -m "Built by $run with pbt-extract $PBT_EXTRACT."
+            git commit -qm "data: rebuild from source.json" -m "Built by $run with pbt-extract $PBT_EXTRACT." -m "$(cat "$RUNNER_TEMP"/fetched/*.txt)"
             git push -q
           else
             branch=build/poe1-$LEAGUE-$GITHUB_RUN_ID
             git checkout -q -b "$branch"
-            git commit -qm "data: rebuild poe1 $LEAGUE" -m "Built by $run with pbt-extract $PBT_EXTRACT."
+            git commit -qm "data: rebuild poe1 $LEAGUE" -m "Built by $run with pbt-extract $PBT_EXTRACT." -m "$(cat "$RUNNER_TEMP"/fetched/*.txt)"
             git push -q origin "$branch"
             gh pr create --base main --head "$branch" --title "data: rebuild poe1 $LEAGUE" --body "Built from \`poe1/$LEAGUE/source.json\` by $run with pbt-extract \`$PBT_EXTRACT\`."
           fi
