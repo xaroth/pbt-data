@@ -1,7 +1,7 @@
 name: build
 
 # Builds league datasets from their source.json. On a pull request it builds every league whose
-# source.json changed, or every league when this workflow or its scripts changed (such as a new
+# source.json changed, or every league when this workflow or the Steam login changed (such as a new
 # PBT_EXTRACT), and pushes the datasets onto the pull request. Run by hand, it builds one league
 # and opens a pull request.
 on:
@@ -9,7 +9,7 @@ on:
     paths:
       - poe1/*/source.json
       - .github/workflows/build.yml
-      - scripts/**
+      - scripts/steam-code.py
   workflow_dispatch:
     inputs:
       league:
@@ -56,7 +56,7 @@ jobs:
           else
             # Since the branch left main, so main's later changes are not counted.
             changed=$(git diff --name-only "$BASE...$HEAD")
-            if grep -qE '^(\.github/workflows/build\.yml|scripts/)' <<< "$changed"; then
+            if grep -qE '^(\.github/workflows/build\.yml|scripts/steam-code\.py)$' <<< "$changed"; then
               leagues=$(ls poe1/*/source.json | cut -d/ -f2)
             else
               leagues=$(grep -E '^poe1/[^/]+/source\.json$' <<< "$changed" | while read -r f; do [ -f "$f" ] && echo "$f"; done | cut -d/ -f2)
@@ -156,15 +156,20 @@ jobs:
           STEAM_PASSWORD: ${{ secrets.STEAM_PASSWORD }}
           STEAM_SHARED_SECRET: ${{ secrets.STEAM_SHARED_SECRET }}
         run: |
+          # A code is accepted once; detect or another build may have used the current one, so a
+          # failed attempt retries with the next.
           fetch() {
-            python3 -I scripts/steam-code.py | DepotDownloader -app "$STEAM_APP" -depot "$STEAM_DEPOT" -manifest "$steamManifest" \
-              -username "$STEAM_USERNAME" -password "$STEAM_PASSWORD" -no-mobile -filelist "$1" -dir "$RUNNER_TEMP/in"
+            for attempt in 1 2 3; do
+              python3 -I scripts/steam-code.py | DepotDownloader -app "$STEAM_APP" -depot "$STEAM_DEPOT" -manifest "$steamManifest" \
+                -username "$STEAM_USERNAME" -password "$STEAM_PASSWORD" -no-mobile -filelist "$1" -dir "$RUNNER_TEMP/in" && return
+              [ "$attempt" = 3 ] || { echo "attempt $attempt failed; retrying with a fresh code"; sleep 31; }
+            done
+            return 1
           }
           echo Bundles2/_.index.bin > "$RUNNER_TEMP/index.txt"
           fetch "$RUNNER_TEMP/index.txt"
           pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" bundles "$RUNNER_TEMP/in" > "$RUNNER_TEMP/bundles.txt"
           echo "$(wc -l < "$RUNNER_TEMP/bundles.txt") bundles"
-          # A fresh code: Steam does not accept one twice.
           sleep 31
           fetch "$RUNNER_TEMP/bundles.txt"
 
