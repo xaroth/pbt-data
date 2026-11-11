@@ -1,9 +1,8 @@
 {
   "format": 1,
   "game": "poe1",
-  "version": "3.29.3.5",
-  "id": "3e69e843191714898876bb92631af2bbf6965fc93589083f5fe2cf15a6a6f984",
-  "source": null,
+  "version": "3.29.3.6",
+  "id": "e289097d0083987692a916fe008bed5b87b9265dcc880523bcea391251c974a1",
   "files": [
     {
       "name": "stats.fb",
@@ -42,8 +41,33 @@
     },
     {
       "name": "text-en.fb",
-      "size": 2745600,
-      "sha256": "4c9e323a1aac5cc9f2fa52643e9f1a02045bf1307d266cf91dd3aa157138ca7c"
+      "size": 5925616,
+      "sha256": "d5f5dd2095290460fd4857abbee20b07ab6c17cda77bc3cf90be281ee8b0b848"
+    },
+    {
+      "name": "items.fb",
+      "size": 191440,
+      "sha256": "a9a8236fb278fa88dbd1c0e3cce4bb3dd483240141ba0d6268c3cab63dfb3f7a"
+    },
+    {
+      "name": "mods.fb",
+      "size": 6037584,
+      "sha256": "e60e95f41c809a5f7c79ae4952012336443e859d7d842f13c18afd3ff221bebf"
+    },
+    {
+      "name": "skills.fb",
+      "size": 9302576,
+      "sha256": "b120a3efcbf72101951f53775240bcadba4b79570a94bf35d543ec16281ed2f4"
+    },
+    {
+      "name": "buffs.fb",
+      "size": 276076,
+      "sha256": "9d2756061e40148fe3000aa9b4805ee224838a4f555d334ca483f708cb35376b"
+    },
+    {
+      "name": "monsters.fb",
+      "size": 3222252,
+      "sha256": "d4931da8fda9de09fee153aa19ef635a76700ff6cc4753fe7aaadf9f43e734f2"
     }
   ]
 }
