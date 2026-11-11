@@ -47,7 +47,8 @@ jobs:
 
       - name: Steam app info
         run: |
-          sudo apt-get install -y -qq lib32gcc-s1 > /dev/null
+          sudo apt-get update -qq -o Acquire::Retries=5
+          sudo apt-get install -y -qq -o Acquire::Retries=5 lib32gcc-s1 > /dev/null
           dir=$RUNNER_TEMP/steamcmd
           if [ ! -x "$dir/steamcmd.sh" ]; then
             mkdir -p "$dir"
