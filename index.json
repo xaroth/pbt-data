@@ -2,15 +2,15 @@
   "poe1": {
     "3.28": {
       "version": "3.28.0.16",
-      "manifest": "f03861a7c635f168a102601ba91a31e8a2d309c766df8810d76c8715ff8716a9"
+      "manifest": "d9f08630d7d393ac88d0123aa0d9b3e0dd7ba334caabd2678ea5d8c97202ad0a"
     },
     "3.29": {
       "version": "3.29.3.6",
-      "manifest": "ca629b3d06bc3041e2a1af55ac74b156f3752349e96daf8dad3cc459e82bb06d"
+      "manifest": "ac38e212dd71f0b9689769cc6dfc21d7107ce203c8c32a9f9a849ead2893f2c9"
     },
     "3.27": {
       "version": "3.27.0.10",
-      "manifest": "ca32b71ef28010a86707f23e391e7591a0fb3a51398e60847487414192a001fd"
+      "manifest": "32eff97e61791bfaf32fc6073b7a69b77f99e853be304b368be779e03e3c0922"
     }
   }
 }
