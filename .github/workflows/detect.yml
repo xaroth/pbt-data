@@ -115,5 +115,5 @@ jobs:
           else
             git push -qf origin "$BRANCH"
             gh pr create --base main --head "$BRANCH" --title "$TITLE" \
-              --body "Detected by $run. \`build\` adds the dataset to this pull request; merging publishes it."
+              --body "Detected by $run. \`build\` builds and checks the dataset on this pull request; merging publishes it."
           fi
