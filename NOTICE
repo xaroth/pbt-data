@@ -1,8 +1,10 @@
 pbt-data
 
-The data in this repository is derived from the game files of Path of Exile. Path of Exile and
-its game data are the property of Grinding Gear Games. This repository holds derived values
-only (stat ids, numbers, names and text), for non-commercial use; no art, audio or game files.
+The data this repository builds and publishes at https://pbt-data.xaroth.nl/ is derived from the
+game files of Path of Exile. Path of Exile and its game data are the property of Grinding Gear
+Games. The published data holds derived values only (stat ids, numbers, names and text), for
+non-commercial use, and the passive tree sprite sheets Grinding Gear Games publishes in
+https://github.com/grindinggear/skilltree-export, unchanged; no other art, audio or game files.
 The data is not licensed by the maintainers of this repository.
 
 This product isn't affiliated with or endorsed by Grinding Gear Games in any way.

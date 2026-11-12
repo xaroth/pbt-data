@@ -1,17 +1,43 @@
 # pbt-data
 
-Path of Exile game data for [pbt-engine](https://github.com/xaroth/pbt-engine), built from the game files by [pbt-extract](https://github.com/xaroth/pbt-extract).
+Path of Exile game data for [pbt-engine](https://github.com/xaroth/pbt-engine), built from the game files by [pbt-extract](https://github.com/xaroth/pbt-extract). This repository holds the recipes, the scripts and CI; CI publishes what it builds to `https://pbt-data.xaroth.nl/`.
 
-## Layout
+## Bucket
+
+Every dataset and the passive tree's art, addressed by content:
+
+| Path | Holds | Changes |
+|---|---|---|
+| `blobs/<sha256>` | Every dataset file and art file, by its SHA-256 | Never |
+| `manifests/<id>.json` | A dataset's `manifest.json`, by its dataset id | Never |
+| `manifests/<sha256>.json` | An art manifest, by its own SHA-256 | Never |
+| `index.json` | Per game and league: the latest `version`, its `dataset` id and its `art` manifest | On every publish |
+
+```json
+{"poe1": {"3.29": {"version": "3.29.3.6", "dataset": "f9bfe4de…", "art": "e7d429be…"}}}
+```
+
+A dataset manifest lists each file by name with its size and SHA-256. Its `id` is the SHA-256 of the game, the version, the capabilities and every file's name and hash (pbt-engine's `dataset` package computes it), so a manifest can be checked against the id it was fetched by.
+
+The art manifest lists each sprite sheet the same way, and per sprite kind (such as `normalActive`) one sheet per zoom level with the rectangle of each icon, keyed by the art path the layouts name. A node's icon is on the `keystoneActive`/`keystoneInactive`, `notable…`, `mastery` or `normal…` sheets by its kind; a mastery's other art on `masteryInactive`, `masteryConnected`, `masteryActiveSelected` and `masteryActiveEffect`; group backgrounds on `groupBackground`. The build fails when a layout names art the sheets lack. Class illustrations are not in the export and have no entry. The sheets and their layout are GGG's, from [skilltree-export](https://github.com/grindinggear/skilltree-export).
+
+Blobs and manifests are uploaded before the `index.json` that names them, so a reader never sees a dataset in part. CI never overwrites or deletes a blob or manifest; a rebuild that changes nothing uploads nothing and leaves `index.json` as it is. Blobs and manifests are cached forever. `index.json` is cached at the edge, purged on every publish, and revalidated by browsers.
+
+### Use
+
+- The latest of a league: read `index.json`, then fetch `manifests/<dataset>.json` and `manifests/<art>.json`.
+- A fixed dataset: pin its id and fetch `manifests/<id>.json`; a published id never changes or goes away through CI. Pin art by its manifest's SHA-256 the same way.
+- Then fetch each listed file from `blobs/<sha256>` and check it against that hash. A file you already hold with the same hash needs no download.
+
+`python3 scripts/bucket.py verify https://pbt-data.xaroth.nl` downloads everything `index.json` names and checks every hash.
+
+## Recipes
 
 ```
-index.json              per game and league: the latest patch and the SHA-256 of its manifest.json
-<game>/<league>/
-  source.json           what the league's dataset is built from (see below)
-  manifest.json, *.fb   the dataset of the latest patch
+<game>/<league>/source.json   what the league's dataset is built from
 ```
 
-One dataset per league, the latest patch. Earlier patches are in git history.
+One dataset per league, the latest patch. Earlier datasets stay in the bucket under their ids.
 
 `source.json` is the build recipe; CI reads it to fetch and prepare pbt-extract's input:
 
@@ -25,28 +51,23 @@ One dataset per league, the latest patch. Earlier patches are in git history.
 
 ## Build
 
-The `build` workflow builds datasets from `source.json`:
+The `build` workflow builds each league's dataset and tree art from `source.json`, then checks that every file each manifest lists is there with its size and SHA-256. It builds every league whose `source.json` changed, or every league when the workflow, `scripts/steam-code.py` or `scripts/bucket.py` changed (such as a new `PBT_EXTRACT`, the pbt-extract commit it runs).
 
-- On a pull request it builds every league whose `source.json` changed, or every league when the workflow or `scripts/steam-code.py` changed (such as a new `PBT_EXTRACT`, the pbt-extract commit it runs), and pushes the datasets and `index.json` onto the pull request. Merging publishes recipe and data together. A rebuild that changes nothing pushes nothing.
-- Run by hand (`gh workflow run build.yml -f league=3.29`) it builds one league and opens a pull request when the dataset changed.
+- On a pull request it builds and checks, and publishes nothing.
+- On `main` it builds the same leagues and publishes them with `scripts/bucket.py publish`: blobs, then manifests, then `index.json`, then one purge of `index.json` from the cache. It then downloads what it published through `https://pbt-data.xaroth.nl/` and checks every hash. Secrets: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `CLOUDFLARE_PURGE_TOKEN`, `CLOUDFLARE_ZONE_ID`.
+- Run by hand (`gh workflow run build.yml -f league=3.29`, or without `league` for every league) it builds and checks, and publishes when run on `main`.
 
-Per league it downloads the bundles a build reads: from the CDN (`patch.poecdn.com/<version>/`, no login) when it still serves the version, which it does only for the live patch; otherwise, or when a CDN download fails partway, from Steam (depot manifest `steamManifest`, with the build account's secrets). It then builds `schema.json` at `datSchemaCommit`, fetches the tree export at `treeExportCommit` and runs pbt-extract.
+Per league it downloads the bundles a build reads: from the CDN (`patch.poecdn.com/<version>/`, no login) when it still serves the version, which it does only for the live patch; otherwise, or when a CDN download fails partway, from Steam (depot manifest `steamManifest`, with the build account's secrets). It then builds `schema.json` at `datSchemaCommit`, fetches the tree export (its JSON and `assets/`) at `treeExportCommit` and runs pbt-extract, which writes the dataset and the tree art.
 
 ## Detect
 
 The `detect` workflow runs hourly (and by hand with `gh workflow run detect.yml`). `scripts/detect.py` compares the latest game version ([latest-patch-version](https://github.com/poe-tool-dev/latest-patch-version)) and Steam's public manifest (anonymous app info, no account) with the recipes and the league's open `detect/poe1-<league>` pull request:
 
-- A new patch with a new Steam manifest: writes the league's `source.json` (newest dat-schema commit, newest skilltree-export tag of the league) and pushes it to `detect/poe1-<league>`, opening its pull request when none is open. `build` then adds the dataset.
+- A new patch with a new Steam manifest: writes the league's `source.json` (newest dat-schema commit, newest skilltree-export tag of the league) and pushes it to `detect/poe1-<league>`, opening its pull request when none is open. `build` then checks that it builds; merging publishes it.
 - A new version whose Steam manifest has not changed yet, or a new league without a skilltree-export tag: waits for the next run.
 - The pull request's build failed: moves `datSchemaCommit` to a newer dat-schema commit when there is one, which builds again. Otherwise reruns the build once, since the cause may be Steam or the network, then waits for a newer dat-schema commit.
 
 When there is something to push, it mints a token of the `xaroth-actions-helper` App (`APP_ID`, `APP_PRIVATE_KEY`) and pushes with it, so `build` runs on its pushes. Nothing merges automatically. On a pull request that changes detection it runs without pushing.
-
-## Use
-
-Read `index.json`. When a league's manifest hash differs from your copy, download its `manifest.json`, check it against that hash, then download the files whose SHA-256 differs from yours. `pbt data pull` in pbt-engine does this.
-
-Raw URLs: `https://raw.githubusercontent.com/xaroth/pbt-data/<ref>/`, `main` for the latest data or a commit for a fixed snapshot.
 
 ## Status
 

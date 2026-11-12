@@ -1,24 +1,32 @@
 name: build
 
-# Builds league datasets from their source.json. On a pull request it builds every league whose
-# source.json changed, or every league when this workflow or the Steam login changed (such as a new
-# PBT_EXTRACT), and pushes the datasets onto the pull request. Run by hand, it builds one league
-# and opens a pull request.
+# Builds league datasets and tree art from their source.json and checks them. On a pull request it
+# builds every league whose source.json changed, or every league when this workflow, the Steam login
+# or the publish script changed (such as a new PBT_EXTRACT); it publishes nothing. On main the same
+# leagues are built and published to the bucket. Run by hand it builds one league, or all when none
+# is given, and publishes when run on main.
 on:
   pull_request:
     paths:
       - poe1/*/source.json
       - .github/workflows/build.yml
       - scripts/steam-code.py
+      - scripts/bucket.py
+  push:
+    branches: [main]
+    paths:
+      - poe1/*/source.json
+      - .github/workflows/build.yml
+      - scripts/steam-code.py
+      - scripts/bucket.py
   workflow_dispatch:
     inputs:
       league:
-        description: League folder under poe1/, such as 3.29
-        required: true
+        description: League folder under poe1/, such as 3.29; empty for every league
+        required: false
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.run_id }}
@@ -26,38 +34,38 @@ concurrency:
 
 env:
   # Bump to rebuild every league with a newer extractor.
-  PBT_EXTRACT: 24c45408847228cb615dbd7cdd9f039bce5c86ef
+  PBT_EXTRACT: 2efc6410991d44030e603ff60e7eab883b0e1c22
   OOZ: ff5aeb9e45e362e8d6bb1199aa82406285dd2a18
   DEPOT_DOWNLOADER: DepotDownloader_3.4.0
   STEAM_APP: "238960"
   STEAM_DEPOT: "238961"
+  BOTO3: "1.43.112"
+  PUBLIC_URL: https://pbt-data.xaroth.nl
 
 jobs:
   leagues:
     # Pull requests from forks get no secrets.
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     outputs:
       leagues: ${{ steps.list.outputs.leagues }}
     steps:
-      # The pull request's own commit, not its merge with main: publish writes into the branch.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - id: list
         env:
           INPUT_LEAGUE: ${{ inputs.league }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          # A pull request counts its changes since the branch left main; a push, what it pushed.
+          RANGE: ${{ github.event_name == 'pull_request' && format('{0}...{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
         run: |
+          all=$(ls poe1/*/source.json | cut -d/ -f2)
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            leagues=$INPUT_LEAGUE
+            leagues=${INPUT_LEAGUE:-$all}
           else
-            # Since the branch left main, so main's later changes are not counted.
-            changed=$(git diff --name-only "$BASE...$HEAD")
-            if grep -qE '^(\.github/workflows/build\.yml|scripts/steam-code\.py)$' <<< "$changed"; then
-              leagues=$(ls poe1/*/source.json | cut -d/ -f2)
+            changed=$(git diff --name-only "$RANGE")
+            if grep -qE '^(\.github/workflows/build\.yml|scripts/(steam-code|bucket)\.py)$' <<< "$changed"; then
+              leagues=$all
             else
               leagues=$(grep -E '^poe1/[^/]+/source\.json$' <<< "$changed" | while read -r f; do [ -f "$f" ] && echo "$f"; done | cut -d/ -f2)
             fi
@@ -80,8 +88,6 @@ jobs:
       LEAGUE: ${{ matrix.league }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Read source.json
         run: |
@@ -145,10 +151,12 @@ jobs:
 
       - name: Tree export
         run: |
+          git clone -q --filter=blob:none --no-checkout https://github.com/grindinggear/skilltree-export "$RUNNER_TEMP/tree-src"
+          cd "$RUNNER_TEMP/tree-src"
+          git sparse-checkout set --no-cone /data.json /ruthless.json /alternate.json /assets/
+          git -c advice.detachedHead=false checkout -q "$treeExportCommit"
           mkdir -p "$RUNNER_TEMP/in/tree"
-          for f in data.json ruthless.json alternate.json; do
-            curl -fsSL -o "$RUNNER_TEMP/in/tree/$f" "https://raw.githubusercontent.com/grindinggear/skilltree-export/$treeExportCommit/$f"
-          done
+          cp -r data.json ruthless.json alternate.json assets "$RUNNER_TEMP/in/tree/"
 
       # The CDN serves the live patch without a login; Steam serves any patch by manifest id.
       - name: Game files
@@ -208,8 +216,13 @@ jobs:
         run: |
           pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" -version "$version" dataset "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE"
           id=$(jq -r .id "$RUNNER_TEMP/out/$LEAGUE/manifest.json")
-          echo "id $id, game files from $fetched"
-          echo "$LEAGUE: $version from $fetched, id \`$id\`" | tee -a "$GITHUB_STEP_SUMMARY" > "$RUNNER_TEMP/fetched-$LEAGUE.txt"
+          echo "$LEAGUE: $version from $fetched, id \`$id\`" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Tree art
+        run: pbt-extract art "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE/art"
+
+      - name: Check
+        run: python3 -I scripts/bucket.py check "$RUNNER_TEMP/out"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -217,19 +230,16 @@ jobs:
           path: ${{ runner.temp }}/out
           retention-days: 7
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: fetched-${{ matrix.league }}
-          path: ${{ runner.temp }}/fetched-${{ matrix.league }}.txt
-          retention-days: 7
-
   publish:
     needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # index.json is read, updated and written; two publishes at once could drop a league.
+    concurrency:
+      group: publish
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref || github.ref }}
 
       - uses: actions/download-artifact@v8
         with:
@@ -237,47 +247,29 @@ jobs:
           merge-multiple: true
           path: ${{ runner.temp }}/out
 
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: fetched-*
-          merge-multiple: true
-          path: ${{ runner.temp }}/fetched
+      - name: Install boto3
+        run: python3 -m venv "$RUNNER_TEMP/venv" && "$RUNNER_TEMP/venv/bin/pip" install -q "boto3==$BOTO3"
 
-      - name: Update league folders and index.json
-        run: |
-          for d in "$RUNNER_TEMP"/out/*/; do
-            league=$(basename "$d")
-            dir=poe1/$league
-            find "$dir" -mindepth 1 -maxdepth 1 ! -name source.json -delete
-            cp "$d"* "$dir/"
-            version=$(jq -r .version "$dir/manifest.json")
-            sum=$(sha256sum "$dir/manifest.json" | cut -c1-64)
-            jq --arg l "$league" --arg v "$version" --arg m "$sum" '.poe1[$l] = {version: $v, manifest: $m}' index.json > "$RUNNER_TEMP/index.json"
-            mv "$RUNNER_TEMP/index.json" index.json
-            echo "$league: $version, id $(jq -r .id "$dir/manifest.json")"
-          done
-          git status --short
-
-      - name: Commit
+      - name: Upload
+        id: upload
         env:
-          GH_TOKEN: ${{ github.token }}
-          LEAGUE: ${{ inputs.league }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          git add -A
-          if git diff --cached --quiet; then
-            echo "datasets unchanged"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            git commit -qm "data: rebuild from source.json" -m "Built by $run with pbt-extract $PBT_EXTRACT." -m "$(cat "$RUNNER_TEMP"/fetched/*.txt)"
-            git push -q
-          else
-            branch=build/poe1-$LEAGUE-$GITHUB_RUN_ID
-            git checkout -q -b "$branch"
-            git commit -qm "data: rebuild poe1 $LEAGUE" -m "Built by $run with pbt-extract $PBT_EXTRACT." -m "$(cat "$RUNNER_TEMP"/fetched/*.txt)"
-            git push -q origin "$branch"
-            gh pr create --base main --head "$branch" --title "data: rebuild poe1 $LEAGUE" --body "Built from \`poe1/$LEAGUE/source.json\` by $run with pbt-extract \`$PBT_EXTRACT\`."
-          fi
+          "$RUNNER_TEMP/venv/bin/python" -I scripts/bucket.py publish "$RUNNER_TEMP/out" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Purge index.json
+        if: steps.upload.outputs.changed == 'true'
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}
+          ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: |
+          curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE/purge_cache" \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            --data "{\"files\":[\"$PUBLIC_URL/index.json\"]}" | jq -e .success
+
+      # Through the public domain, so it also checks the purge and the custom domain.
+      - name: Verify
+        run: python3 -I scripts/bucket.py verify "$PUBLIC_URL" "$RUNNER_TEMP/out"
