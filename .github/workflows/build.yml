@@ -251,17 +251,19 @@ jobs:
         run: python3 -m venv "$RUNNER_TEMP/venv" && "$RUNNER_TEMP/venv/bin/pip" install -q "boto3==$BOTO3"
 
       - name: Upload
-        id: upload
         env:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        # Explicit bash adds pipefail, so a failed publish is not hidden by tee.
+        shell: bash
         run: |
           "$RUNNER_TEMP/venv/bin/python" -I scripts/bucket.py publish "$RUNNER_TEMP/out" | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # On every publish, not only when index.json changed: a run that wrote index.json and
+      # failed before its purge is finished by the next.
       - name: Purge index.json
-        if: steps.upload.outputs.changed == 'true'
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}
           ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}

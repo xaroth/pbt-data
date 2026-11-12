@@ -17,9 +17,8 @@ Commands:
 
     check DIR      every file each manifest lists is in DIR with its size and SHA-256
     publish DIR    check, then upload what the bucket lacks: blobs, then manifests, then
-                   index.json. Never overwrites a blob or manifest. Writes changed=true|false
-                   to $GITHUB_OUTPUT when set. Needs R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
-                   R2_SECRET_ACCESS_KEY and R2_BUCKET; boto3.
+                   index.json. Never overwrites a blob or manifest. Needs R2_ACCOUNT_ID,
+                   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET; boto3.
     verify URL [DIR]
                    download every file the index at URL names and check each against its
                    SHA-256; with DIR, the index must name DIR's leagues as built, and only
@@ -272,10 +271,7 @@ def main(argv: list[str]) -> int:
         if cmd == "publish":
             env = os.environ
             bucket = R2(env["R2_ACCOUNT_ID"], env["R2_ACCESS_KEY_ID"], env["R2_SECRET_ACCESS_KEY"], env["R2_BUCKET"])
-            result = publish(bucket, built)
-            if out := env.get("GITHUB_OUTPUT"):
-                with open(out, "a") as f:
-                    f.write(f"changed={str(result.index_changed).lower()}\n")
+            publish(bucket, built)
     except Invalid as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
