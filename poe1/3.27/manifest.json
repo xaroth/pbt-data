@@ -2,7 +2,7 @@
   "format": 1,
   "game": "poe1",
   "version": "3.27.0.10",
-  "id": "47c1463011f7f04fb0ccb8ab8a598116c208f8cefbd3971825a82868738aca4f",
+  "id": "ea2560b5c223ded696b21bddbd81313046a81da22726a5218e420b4c25d6c071",
   "files": [
     {
       "name": "stats.fb",
@@ -46,8 +46,8 @@
     },
     {
       "name": "items.fb",
-      "size": 201252,
-      "sha256": "70fae236da9de429864e150d64b94bfee680ddd7b7a0fa7d75c7175b8f900a74"
+      "size": 315064,
+      "sha256": "4c12c1e9bce331826c49b7e4a34006086c00d35c49aea982f5adcc1063676447"
     },
     {
       "name": "mods.fb",
