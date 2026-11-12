@@ -5,10 +5,11 @@ Path of Exile game data for [pbt-engine](https://github.com/xaroth/pbt-engine), 
 ## Layout
 
 ```
-index.json              per game and league: the latest patch and the SHA-256 of its manifest.json
+index.json              per game and league: the latest patch and the SHA-256 of its manifest.json and art/manifest.json
 <game>/<league>/
   source.json           what the league's dataset is built from (see below)
   manifest.json, *.fb   the dataset of the latest patch
+  art/                  the passive tree's sprite sheets and their manifest.json
 ```
 
 One dataset per league, the latest patch. Earlier patches are in git history.
@@ -30,7 +31,7 @@ The `build` workflow builds datasets from `source.json`:
 - On a pull request it builds every league whose `source.json` changed, or every league when the workflow or `scripts/steam-code.py` changed (such as a new `PBT_EXTRACT`, the pbt-extract commit it runs), and pushes the datasets and `index.json` onto the pull request. Merging publishes recipe and data together. A rebuild that changes nothing pushes nothing.
 - Run by hand (`gh workflow run build.yml -f league=3.29`) it builds one league and opens a pull request when the dataset changed.
 
-Per league it downloads the bundles a build reads: from the CDN (`patch.poecdn.com/<version>/`, no login) when it still serves the version, which it does only for the live patch; otherwise, or when a CDN download fails partway, from Steam (depot manifest `steamManifest`, with the build account's secrets). It then builds `schema.json` at `datSchemaCommit`, fetches the tree export at `treeExportCommit` and runs pbt-extract.
+Per league it downloads the bundles a build reads: from the CDN (`patch.poecdn.com/<version>/`, no login) when it still serves the version, which it does only for the live patch; otherwise, or when a CDN download fails partway, from Steam (depot manifest `steamManifest`, with the build account's secrets). It then builds `schema.json` at `datSchemaCommit`, fetches the tree export (its JSON and `assets/`) at `treeExportCommit` and runs pbt-extract, which writes the dataset and the tree art.
 
 ## Detect
 
@@ -45,6 +46,8 @@ When there is something to push, it mints a token of the `xaroth-actions-helper`
 ## Use
 
 Read `index.json`. When a league's manifest hash differs from your copy, download its `manifest.json`, check it against that hash, then download the files whose SHA-256 differs from yours. `pbt data pull` in pbt-engine does this.
+
+The tree art is apart from the dataset, so `pbt data pull` does not fetch it. `art/manifest.json` lists each sheet with its size and SHA-256, and per sprite kind (such as `normalActive`) one sheet per zoom level with the rectangle of each icon, keyed by the art path the layouts name. A node's icon is on the `keystoneActive`/`keystoneInactive`, `notable…`, `mastery` or `normal…` sheets by its kind; a mastery's other art on `masteryInactive`, `masteryConnected`, `masteryActiveSelected` and `masteryActiveEffect`; group backgrounds on `groupBackground`. The build fails when a layout names art the sheets lack. Class illustrations are not in the export and have no entry. The sheets and their layout are GGG's, from [skilltree-export](https://github.com/grindinggear/skilltree-export).
 
 Raw URLs: `https://raw.githubusercontent.com/xaroth/pbt-data/<ref>/`, `main` for the latest data or a commit for a fixed snapshot.
 

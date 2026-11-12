@@ -26,7 +26,7 @@ concurrency:
 
 env:
   # Bump to rebuild every league with a newer extractor.
-  PBT_EXTRACT: 24c45408847228cb615dbd7cdd9f039bce5c86ef
+  PBT_EXTRACT: e4f5c6ea7c2272b4d8840b0992056e6c9410232c
   OOZ: ff5aeb9e45e362e8d6bb1199aa82406285dd2a18
   DEPOT_DOWNLOADER: DepotDownloader_3.4.0
   STEAM_APP: "238960"
@@ -145,10 +145,12 @@ jobs:
 
       - name: Tree export
         run: |
+          git clone -q --filter=blob:none --no-checkout https://github.com/grindinggear/skilltree-export "$RUNNER_TEMP/tree-src"
+          cd "$RUNNER_TEMP/tree-src"
+          git sparse-checkout set --no-cone /data.json /ruthless.json /alternate.json /assets/
+          git -c advice.detachedHead=false checkout -q "$treeExportCommit"
           mkdir -p "$RUNNER_TEMP/in/tree"
-          for f in data.json ruthless.json alternate.json; do
-            curl -fsSL -o "$RUNNER_TEMP/in/tree/$f" "https://raw.githubusercontent.com/grindinggear/skilltree-export/$treeExportCommit/$f"
-          done
+          cp -r data.json ruthless.json alternate.json assets "$RUNNER_TEMP/in/tree/"
 
       # The CDN serves the live patch without a login; Steam serves any patch by manifest id.
       - name: Game files
@@ -211,6 +213,9 @@ jobs:
           echo "id $id, game files from $fetched"
           echo "$LEAGUE: $version from $fetched, id \`$id\`" | tee -a "$GITHUB_STEP_SUMMARY" > "$RUNNER_TEMP/fetched-$LEAGUE.txt"
 
+      - name: Tree art
+        run: pbt-extract art "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE/art"
+
       - uses: actions/upload-artifact@v7
         with:
           name: dataset-${{ matrix.league }}
@@ -248,11 +253,12 @@ jobs:
           for d in "$RUNNER_TEMP"/out/*/; do
             league=$(basename "$d")
             dir=poe1/$league
-            find "$dir" -mindepth 1 -maxdepth 1 ! -name source.json -delete
-            cp "$d"* "$dir/"
+            find "$dir" -mindepth 1 -maxdepth 1 ! -name source.json -exec rm -rf {} +
+            cp -r "$d". "$dir/"
             version=$(jq -r .version "$dir/manifest.json")
             sum=$(sha256sum "$dir/manifest.json" | cut -c1-64)
-            jq --arg l "$league" --arg v "$version" --arg m "$sum" '.poe1[$l] = {version: $v, manifest: $m}' index.json > "$RUNNER_TEMP/index.json"
+            art=$(sha256sum "$dir/art/manifest.json" | cut -c1-64)
+            jq --arg l "$league" --arg v "$version" --arg m "$sum" --arg a "$art" '.poe1[$l] = {version: $v, manifest: $m, art: $a}' index.json > "$RUNNER_TEMP/index.json"
             mv "$RUNNER_TEMP/index.json" index.json
             echo "$league: $version, id $(jq -r .id "$dir/manifest.json")"
           done
