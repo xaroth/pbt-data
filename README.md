@@ -23,13 +23,13 @@ A dataset manifest lists each file by name with its size and SHA-256. Its `id` i
 
 Each tree of a dataset lists the game's node overrides, tattoos and runegrafts, each with its id, kind, the nodes it may replace, its icon and its stats; their names are in both language files. Every tree of a league gets the same list. 3.27's game files do not say which nodes an override may not replace, so its overrides list no excluded nodes. Overrides that are unused or incomplete in the game files are left out, and the build warns about each one.
 
-Each character lists its unarmed damage and attack time. An item mod lists the skills it grants, each as granted effect and level, and a node the skill it grants; the ruthless tree holds the ruthless grant of each node. A granted skill's levels are in the skills group.
+Each character lists its unarmed damage and attack time. An item mod lists the skills it grants, each as granted effect and level, and the skills it grants in Ruthless where the game gives it others. A node lists the skill it grants; the ruthless tree holds the ruthless grant of each node. A granted skill's levels are in the skills group.
 
 Each tree of a dataset holds the jewel lists, the same in every tree of a league:
 
 - Jewel radii, by name and distance.
 - Cluster jewels: the sockets that take one, with size, index, proxy node and parent socket; each size's node layout; the small passive kinds; and the notables and keystones a jewel mod adds, keyed by its stat.
-- Timeless jewels: the alternate tree versions, in game row order, each with its replacement passives and added stats. The Abyss versions are left out.
+- Timeless jewels: the alternate tree versions, in game row order, each with its replacement passives and added stats. The Abyss versions are left out. Each replacement passive's name is in the language files, keyed by its id.
 
 The art manifest lists each art file the same way, and per sprite kind (such as `normalActive`) one sheet per zoom level with the rectangle of each icon, keyed by the art path the layouts name. A node's icon is on the `keystoneActive`/`keystoneInactive`, `notable…`, `mastery` or `normal…` sheets by its kind; a mastery's other art on `masteryInactive`, `masteryConnected`, `masteryActiveSelected` and `masteryActiveEffect`; group backgrounds on `groupBackground`. The build fails when a layout names art the sheets lack. Class illustrations are not in the export and have no entry. The sheets and their layout are GGG's, from [skilltree-export](https://github.com/grindinggear/skilltree-export).
 
