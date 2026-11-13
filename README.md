@@ -11,11 +11,13 @@ Every dataset and the passive tree's art, addressed by content:
 | `blobs/<sha256>` | Every dataset file and art file, by its SHA-256 | Never |
 | `manifests/<id>.json` | A dataset's `manifest.json`, by its dataset id | Never |
 | `manifests/<sha256>.json` | An art manifest, by its own SHA-256 | Never |
-| `index.json` | Per game and league: the latest `version`, its `dataset` id and its `art` manifest | On every publish |
+| `index.json` | Per game and league: the latest `version`, its dataset `format`, its `dataset` id and its `art` manifest | On every publish |
 
 ```json
-{"poe1": {"3.29": {"version": "3.29.3.6", "dataset": "f9bfe4de…", "art": "e7d429be…"}}}
+{"poe1": {"3.29": {"version": "3.29.3.6", "format": 1, "dataset": "f9bfe4de…", "art": "e7d429be…"}}}
 ```
+
+`format` is the `format` of the entry's dataset manifest: the version of the dataset's layout, which also covers the shape of its art manifest. A reader opens the latest of a league only when it reads that format, and otherwise keeps the dataset it pins. The format stays 1 until v1.0 is live, so until then it tells readers nothing: a dataset an older reader cannot read fails when it is opened, and one it reads wrongly is not caught.
 
 A dataset manifest lists each file by name with its size and SHA-256. Its `id` is the SHA-256 of the game, the version, the capabilities and every file's name and hash (pbt-engine's `dataset` package computes it), so a manifest can be checked against the id it was fetched by.
 
@@ -25,7 +27,7 @@ Blobs and manifests are uploaded before the `index.json` that names them, so a r
 
 ### Use
 
-- The latest of a league: read `index.json`, then fetch `manifests/<dataset>.json` and `manifests/<art>.json`.
+- The latest of a league: read `index.json`, check its `format`, then fetch `manifests/<dataset>.json` and `manifests/<art>.json`.
 - A fixed dataset: pin its id and fetch `manifests/<id>.json`; a published id never changes or goes away through CI. Pin art by its manifest's SHA-256 the same way.
 - Then fetch each listed file from `blobs/<sha256>` and check it against that hash. A file you already hold with the same hash needs no download.
 

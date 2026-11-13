@@ -36,7 +36,7 @@ def write_manifest(dir: Path, files: dict[str, bytes], **extra) -> None:
 
 def build_league(root: Path, name: str, data: bytes) -> None:
     d = root / name
-    write_manifest(d, {"stats.fb": data, "shared.fb": b"shared"}, game="poe1", version=f"{name}.0.1", id=f"id-{name}")
+    write_manifest(d, {"stats.fb": data, "shared.fb": b"shared"}, game="poe1", version=f"{name}.0.1", format=1, id=f"id-{name}")
     write_manifest(d / "art", {"frame-0.png": b"png-" + data}, sprites={})
 
 
@@ -60,7 +60,7 @@ class PublishTest(unittest.TestCase):
         self.assertTrue(result.index_changed)
         index = json.loads(b.objects["index.json"])
         art = hashlib.sha256((self.tmp / "3.29/art/manifest.json").read_bytes()).hexdigest()
-        self.assertEqual(index["poe1"]["3.29"], {"version": "3.29.0.1", "dataset": "id-3.29", "art": art})
+        self.assertEqual(index["poe1"]["3.29"], {"version": "3.29.0.1", "format": 1, "dataset": "id-3.29", "art": art})
         self.assertEqual(b.objects[f"manifests/{art}.json"], (self.tmp / "3.29/art/manifest.json").read_bytes())
 
     def test_second_run_uploads_nothing(self):
@@ -83,6 +83,32 @@ class PublishTest(unittest.TestCase):
         index = json.loads(b.objects["index.json"])
         self.assertEqual(set(index["poe1"]), {"3.28", "3.29"})
         self.assertEqual(index["poe1"]["3.28"]["dataset"], "id-3.28")
+
+
+class VerifyTest(unittest.TestCase):
+    def setUp(self):
+        tmp = Path(tempfile.mkdtemp())
+        build_league(tmp, "3.29", b"b")
+        self.bucket = FakeBucket()
+        bucket.publish(self.bucket, bucket.leagues(tmp), log=lambda *_: None)
+        self.fetch = bucket.fetch
+        bucket.fetch = lambda url: self.bucket.objects[url.removeprefix("https://x/")]
+
+    def tearDown(self):
+        bucket.fetch = self.fetch
+
+    def verify(self):
+        return bucket.verify("https://x", [], log=lambda *_: None)
+
+    def test_passes_on_what_publish_wrote(self):
+        self.assertEqual(self.verify(), 3)
+
+    def test_refuses_an_entry_without_the_manifests_format(self):
+        index = json.loads(self.bucket.objects["index.json"])
+        del index["poe1"]["3.29"]["format"]
+        self.bucket.objects["index.json"] = json.dumps(index).encode()
+        with self.assertRaisesRegex(bucket.Invalid, "format"):
+            self.verify()
 
 
 class CheckTest(unittest.TestCase):
