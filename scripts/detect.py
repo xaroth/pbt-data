@@ -5,8 +5,9 @@ Reads the latest game version (poe-tool-dev/latest-patch-version), the public St
 league's open detect pull request, the newest dat-schema commit and the skilltree-export tags.
 When a recipe should change it writes it to --out and reports, as GitHub outputs:
 
-    action   none, new (first recipe of a league), update (new patch), retry (newer dat-schema
-             for a failed build) or rerun (rerun a failed build once, its recipe unchanged)
+    action   none, new (first recipe of a league), update (new patch, or a newer skilltree-export
+             tag of the league), retry (newer dat-schema for a failed build) or rerun (rerun a
+             failed build once, its recipe unchanged)
     league   the league, such as 3.29
     branch   detect/poe1-<league>
     pr       the open pull request's number, empty when none
@@ -79,8 +80,8 @@ def league_of(version: str) -> str:
     return ".".join(version.split(".")[:2])
 
 
-def newest_tree_tag(tags: list, league: str) -> str | None:
-    """The commit of league's newest skilltree-export tag; 3.27.0g is newer than 3.27.0."""
+def newest_tree_tag(tags: list, league: str) -> tuple | None:
+    """(name, commit) of league's newest skilltree-export tag; 3.27.0g is newer than 3.27.0."""
     best = None
     for name, commit in tags:
         m = TREE_TAG.fullmatch(name)
@@ -88,7 +89,7 @@ def newest_tree_tag(tags: list, league: str) -> str | None:
             continue
         key = (int(m[3]), m[4])
         if best is None or key > best[0]:
-            best = (key, commit)
+            best = (key, (name, commit))
     return best[1] if best else None
 
 
@@ -104,7 +105,11 @@ def decide(s: State) -> Decision:
 
     if current and version_key(s.version) < version_key(current["version"]):
         return Decision("none", league, f"patch server reports {s.version}, older than {current['version']}")
+    tree = newest_tree_tag(s.tree_tags, league)
     if current and s.version == current["version"]:
+        if tree and tree[1] != current["treeExportCommit"]:
+            return Decision("update", league, f"skilltree-export {tree[0]} is newer than {current['treeExportCommit'][:7]}",
+                            {**current, "treeExportCommit": tree[1]}, f"{GAME} {league}: {s.version}, tree {tree[0]}")
         reason = f"{s.version} is current"
         if s.manifest not in known:
             reason += f"; Steam manifest {s.manifest} is new without a new version, ignored"
@@ -122,10 +127,9 @@ def decide(s: State) -> Decision:
 
     if s.manifest in known:
         return Decision("none", league, f"patch server reports {s.version}, Steam manifest {s.manifest} not updated yet; waiting")
-    tree = newest_tree_tag(s.tree_tags, league)
     if tree is None:
         return Decision("none", league, f"no skilltree-export tag for {league} yet; waiting")
-    recipe = {"version": s.version, "steamManifest": s.manifest, "datSchemaCommit": s.dat_schema, "treeExportCommit": tree}
+    recipe = {"version": s.version, "steamManifest": s.manifest, "datSchemaCommit": s.dat_schema, "treeExportCommit": tree[1]}
     if current:
         return Decision("update", league, f"{current['version']} -> {s.version}", recipe, f"{GAME} {league}: {s.version}")
     return Decision("new", league, f"new league {league} at {s.version}", recipe, f"{GAME} {league}: {s.version}")

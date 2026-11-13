@@ -68,6 +68,7 @@ Per league it downloads the bundles a build reads: from the CDN (`patch.poecdn.c
 The `detect` workflow runs hourly (and by hand with `gh workflow run detect.yml`). `scripts/detect.py` compares the latest game version ([latest-patch-version](https://github.com/poe-tool-dev/latest-patch-version)) and Steam's public manifest (anonymous app info, no account) with the recipes and the league's open `detect/poe1-<league>` pull request:
 
 - A new patch with a new Steam manifest: writes the league's `source.json` (newest dat-schema commit, newest skilltree-export tag of the league) and pushes it to `detect/poe1-<league>`, opening its pull request when none is open. `build` then checks that it builds; merging publishes it.
+- A newer skilltree-export tag of the league (such as `3.29.1` after `3.29.0`) at the same version: moves `treeExportCommit` in the league's `source.json` the same way.
 - A new version whose Steam manifest has not changed yet, or a new league without a skilltree-export tag: waits for the next run.
 - The pull request's build failed: moves `datSchemaCommit` to a newer dat-schema commit when there is one, which builds again. Otherwise reruns the build once, since the cause may be Steam or the network, then waits for a newer dat-schema commit.
 
