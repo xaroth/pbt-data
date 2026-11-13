@@ -25,6 +25,12 @@ Each tree of a dataset lists the game's node overrides, tattoos and runegrafts, 
 
 Each character lists its unarmed damage and attack time. An item mod lists the skills it grants, each as granted effect and level, and a node the skill it grants; the ruthless tree holds the ruthless grant of each node. A granted skill's levels are in the skills group.
 
+Each tree of a dataset holds the jewel lists, the same in every tree of a league:
+
+- Jewel radii, by name and distance.
+- Cluster jewels: the sockets that take one, with size, index, proxy node and parent socket; each size's node layout; the small passive kinds; and the notables and keystones a jewel mod adds, keyed by its stat.
+- Timeless jewels: the alternate tree versions, in game row order, each with its replacement passives and added stats. The Abyss versions are left out.
+
 The art manifest lists each art file the same way, and per sprite kind (such as `normalActive`) one sheet per zoom level with the rectangle of each icon, keyed by the art path the layouts name. A node's icon is on the `keystoneActive`/`keystoneInactive`, `notable…`, `mastery` or `normal…` sheets by its kind; a mastery's other art on `masteryInactive`, `masteryConnected`, `masteryActiveSelected` and `masteryActiveEffect`; group backgrounds on `groupBackground`. The build fails when a layout names art the sheets lack. Class illustrations are not in the export and have no entry. The sheets and their layout are GGG's, from [skilltree-export](https://github.com/grindinggear/skilltree-export).
 
 `classFaces` maps each base class's character id (such as `Metadata/Characters/Str/Str`) to the image of its face plate, cut from the game's UI art. Every character in the league's `Characters` table has one; the build fails otherwise.
