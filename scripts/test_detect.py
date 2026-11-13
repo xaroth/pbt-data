@@ -74,8 +74,9 @@ class TestParse(unittest.TestCase):
                 detect.public_manifest(text)
 
     def test_newest_tree_tag(self):
-        self.assertEqual(detect.newest_tree_tag(TAGS, "3.29"), "8bd138b")
-        self.assertEqual(detect.newest_tree_tag(TAGS, "3.27"), "765dda3")
+        self.assertEqual(detect.newest_tree_tag(TAGS, "3.29"), ("3.29.1", "8bd138b"))
+        self.assertEqual(detect.newest_tree_tag(TAGS, "3.27"), ("3.27.0g", "765dda3"))
+        self.assertEqual(detect.newest_tree_tag([("3.30.0", "a"), ("3.30.0g", "b")], "3.30"), ("3.30.0g", "b"))
         self.assertIsNone(detect.newest_tree_tag(TAGS, "3.30"))
 
 
@@ -108,6 +109,13 @@ class TestDecide(unittest.TestCase):
 
     def test_new_league_without_tree(self):
         self.check(state(version="3.30.0.1", manifest="111"), "none", reason="no skilltree-export tag for 3.30")
+
+    def test_newer_tree_tag(self):
+        tags = [("3.29.1b", "9999999"), *TAGS]
+        d = self.check(state(tree_tags=tags), "update", {**R329, "treeExportCommit": "9999999"}, "skilltree-export 3.29.1b")
+        self.assertEqual(d.title, "poe1 3.29: 3.29.3.5, tree 3.29.1b")
+        pr = detect.PR(7, {**R329, "treeExportCommit": "9999999"}, "pending")
+        self.check(state(tree_tags=tags, pr=pr), "none", reason="3.29.3.5 is current")
 
     def test_steam_not_updated(self):
         self.check(state(version="3.29.3.6"), "none", reason="not updated yet")

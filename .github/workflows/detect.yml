@@ -1,6 +1,6 @@
 name: detect
 
-# Hourly: checks for a new game patch with scripts/detect.py and pushes the league's new
+# Hourly: checks for a new game patch or skilltree-export tag with scripts/detect.py and pushes the league's new
 # source.json to detect/poe1-<league>, opening its pull request when none is open. Steam app
 # info comes from an anonymous login, so no account is used. Pushed with the App's token, minted
 # only when there is something to push, so build runs on it as on any pull request; merging
