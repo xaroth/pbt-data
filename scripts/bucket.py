@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checks built datasets and tree art, publishes them to the bucket and verifies what it serves.
+"""Checks built datasets and art, publishes them to the bucket and verifies what it serves.
 
 A build directory holds one folder per league:
 
