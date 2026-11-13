@@ -4,7 +4,7 @@ Path of Exile game data for [pbt-engine](https://github.com/xaroth/pbt-engine), 
 
 ## Bucket
 
-Every dataset and its art (the passive tree's sprite sheets and the class faces), addressed by content:
+Every dataset and its art (the passive tree's sprite sheets and the class and ascendancy faces), addressed by content:
 
 | Path | Holds | Changes |
 |---|---|---|
@@ -23,7 +23,9 @@ A dataset manifest lists each file by name with its size and SHA-256. Its `id` i
 
 The art manifest lists each art file the same way, and per sprite kind (such as `normalActive`) one sheet per zoom level with the rectangle of each icon, keyed by the art path the layouts name. A node's icon is on the `keystoneActive`/`keystoneInactive`, `notable…`, `mastery` or `normal…` sheets by its kind; a mastery's other art on `masteryInactive`, `masteryConnected`, `masteryActiveSelected` and `masteryActiveEffect`; group backgrounds on `groupBackground`. The build fails when a layout names art the sheets lack. Class illustrations are not in the export and have no entry. The sheets and their layout are GGG's, from [skilltree-export](https://github.com/grindinggear/skilltree-export).
 
-`classFaces` maps each base class's character id (such as `Metadata/Characters/Str/Str`) to the PNG of its face plate, cut from the game's UI art. Every character in the league's `Characters` table has one; the build fails otherwise. Ascendancies have no face.
+`classFaces` maps each base class's character id (such as `Metadata/Characters/Str/Str`) to the PNG of its face plate, cut from the game's UI art. Every character in the league's `Characters` table has one; the build fails otherwise.
+
+`ascendancyFaces` maps each ascendancy id of the standard tree's classes (such as `Raider`, the Warden) to the PNG of its face plate, `ascendancy-<id>.png`, from the same UI art. An ascendancy without a face is left out with a warning; with 3.29's game files all 21 have one.
 
 Blobs and manifests are uploaded before the `index.json` that names them, so a reader never sees a dataset in part. CI never overwrites or deletes a blob or manifest; a rebuild that changes nothing uploads nothing and leaves `index.json` as it is. Blobs and manifests are cached forever. `index.json` is cached at the edge, purged on every publish, and revalidated by browsers.
 
