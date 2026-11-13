@@ -1,6 +1,6 @@
 name: build
 
-# Builds league datasets and tree art from their source.json and checks them. On a pull request it
+# Builds league datasets and art from their source.json and checks them. On a pull request it
 # builds every league whose source.json changed, or every league when this workflow, the Steam login
 # or the publish script changed (such as a new PBT_EXTRACT); it publishes nothing. On main the same
 # leagues are built and published to the bucket. Run by hand it builds one league, or all when none
@@ -34,7 +34,7 @@ concurrency:
 
 env:
   # Bump to rebuild every league with a newer extractor.
-  PBT_EXTRACT: 2efc6410991d44030e603ff60e7eab883b0e1c22
+  PBT_EXTRACT: 376ddb79ae408c87ea414fb333b300873ad4407d
   OOZ: ff5aeb9e45e362e8d6bb1199aa82406285dd2a18
   DEPOT_DOWNLOADER: DepotDownloader_3.4.0
   STEAM_APP: "238960"
@@ -218,8 +218,8 @@ jobs:
           id=$(jq -r .id "$RUNNER_TEMP/out/$LEAGUE/manifest.json")
           echo "$LEAGUE: $version from $fetched, id \`$id\`" | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Tree art
-        run: pbt-extract art "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE/art"
+      - name: Art
+        run: pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" art "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE/art"
 
       - name: Check
         run: python3 -I scripts/bucket.py check "$RUNNER_TEMP/out"

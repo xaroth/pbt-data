@@ -4,7 +4,7 @@ Path of Exile game data for [pbt-engine](https://github.com/xaroth/pbt-engine), 
 
 ## Bucket
 
-Every dataset and the passive tree's art, addressed by content:
+Every dataset and its art (the passive tree's sprite sheets and the class faces), addressed by content:
 
 | Path | Holds | Changes |
 |---|---|---|
@@ -21,7 +21,9 @@ Every dataset and the passive tree's art, addressed by content:
 
 A dataset manifest lists each file by name with its size and SHA-256. Its `id` is the SHA-256 of the game, the version, the capabilities and every file's name and hash (pbt-engine's `dataset` package computes it), so a manifest can be checked against the id it was fetched by.
 
-The art manifest lists each sprite sheet the same way, and per sprite kind (such as `normalActive`) one sheet per zoom level with the rectangle of each icon, keyed by the art path the layouts name. A node's icon is on the `keystoneActive`/`keystoneInactive`, `notable…`, `mastery` or `normal…` sheets by its kind; a mastery's other art on `masteryInactive`, `masteryConnected`, `masteryActiveSelected` and `masteryActiveEffect`; group backgrounds on `groupBackground`. The build fails when a layout names art the sheets lack. Class illustrations are not in the export and have no entry. The sheets and their layout are GGG's, from [skilltree-export](https://github.com/grindinggear/skilltree-export).
+The art manifest lists each art file the same way, and per sprite kind (such as `normalActive`) one sheet per zoom level with the rectangle of each icon, keyed by the art path the layouts name. A node's icon is on the `keystoneActive`/`keystoneInactive`, `notable…`, `mastery` or `normal…` sheets by its kind; a mastery's other art on `masteryInactive`, `masteryConnected`, `masteryActiveSelected` and `masteryActiveEffect`; group backgrounds on `groupBackground`. The build fails when a layout names art the sheets lack. Class illustrations are not in the export and have no entry. The sheets and their layout are GGG's, from [skilltree-export](https://github.com/grindinggear/skilltree-export).
+
+`classFaces` maps each base class's character id (such as `Metadata/Characters/Str/Str`) to the PNG of its face plate, cut from the game's UI art. Every character in the league's `Characters` table has one; the build fails otherwise. Ascendancies have no face.
 
 Blobs and manifests are uploaded before the `index.json` that names them, so a reader never sees a dataset in part. CI never overwrites or deletes a blob or manifest; a rebuild that changes nothing uploads nothing and leaves `index.json` as it is. Blobs and manifests are cached forever. `index.json` is cached at the edge, purged on every publish, and revalidated by browsers.
 
@@ -53,13 +55,13 @@ One dataset per league, the latest patch. Earlier datasets stay in the bucket un
 
 ## Build
 
-The `build` workflow builds each league's dataset and tree art from `source.json`, then checks that every file each manifest lists is there with its size and SHA-256. It builds every league whose `source.json` changed, or every league when the workflow, `scripts/steam-code.py` or `scripts/bucket.py` changed (such as a new `PBT_EXTRACT`, the pbt-extract commit it runs).
+The `build` workflow builds each league's dataset and art from `source.json`, then checks that every file each manifest lists is there with its size and SHA-256. It builds every league whose `source.json` changed, or every league when the workflow, `scripts/steam-code.py` or `scripts/bucket.py` changed (such as a new `PBT_EXTRACT`, the pbt-extract commit it runs).
 
 - On a pull request it builds and checks, and publishes nothing.
 - On `main` it builds the same leagues and publishes them with `scripts/bucket.py publish`: blobs, then manifests, then `index.json`, then one purge of `index.json` from the cache. It then downloads what it published through `https://pbt-data.xaroth.nl/` and checks every hash. Secrets: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `CLOUDFLARE_PURGE_TOKEN`, `CLOUDFLARE_ZONE_ID`.
 - Run by hand (`gh workflow run build.yml -f league=3.29`, or without `league` for every league) it builds and checks, and publishes when run on `main`.
 
-Per league it downloads the bundles a build reads: from the CDN (`patch.poecdn.com/<version>/`, no login) when it still serves the version, which it does only for the live patch; otherwise, or when a CDN download fails partway, from Steam (depot manifest `steamManifest`, with the build account's secrets). It then builds `schema.json` at `datSchemaCommit`, fetches the tree export (its JSON and `assets/`) at `treeExportCommit` and runs pbt-extract, which writes the dataset and the tree art.
+Per league it downloads the bundles a build reads: from the CDN (`patch.poecdn.com/<version>/`, no login) when it still serves the version, which it does only for the live patch; otherwise, or when a CDN download fails partway, from Steam (depot manifest `steamManifest`, with the build account's secrets). It then builds `schema.json` at `datSchemaCommit`, fetches the tree export (its JSON and `assets/`) at `treeExportCommit` and runs pbt-extract, which writes the dataset and the art. The bundles it downloads include the game's UI art the class faces are cut from.
 
 ## Detect
 
