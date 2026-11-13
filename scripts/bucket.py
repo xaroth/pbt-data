@@ -11,7 +11,7 @@ The bucket is addressed by content:
     blobs/<sha256>          every dataset and art file
     manifests/<id>.json     a dataset manifest, by its dataset id
     manifests/<sha256>.json an art manifest, by its own SHA-256
-    index.json              per game and league: version, dataset id, art manifest
+    index.json              per game and league: version, dataset format, dataset id, art manifest
 
 Commands:
 
@@ -59,10 +59,15 @@ class League:
     game: str
     name: str
     version: str
+    format: int
     dataset: str
     art: str
     blobs: list[Object]
     manifests: list[Object]
+
+    def entry(self) -> dict:
+        """The league's entry in index.json."""
+        return {"version": self.version, "format": self.format, "dataset": self.dataset, "art": self.art}
 
 
 def sha256(path: Path) -> str:
@@ -99,11 +104,14 @@ def league(dir: Path) -> League:
         if not m.is_file():
             raise Invalid(f"{m}: missing")
     m = json.loads(dataset_manifest.read_bytes())
+    if not isinstance(m.get("format"), int):
+        raise Invalid(f"{dataset_manifest}: no format")
     art = sha256(art_manifest)
     return League(
         game=m["game"],
         name=dir.name,
         version=m["version"],
+        format=m["format"],
         dataset=m["id"],
         art=art,
         blobs=blobs(dataset_manifest) + blobs(art_manifest),
@@ -129,7 +137,7 @@ def updated_index(current: bytes | None, built: list[League]) -> bytes:
     """current with each built league's entry replaced; other leagues are kept."""
     index = json.loads(current) if current else {}
     for lg in built:
-        index.setdefault(lg.game, {})[lg.name] = {"version": lg.version, "dataset": lg.dataset, "art": lg.art}
+        index.setdefault(lg.game, {})[lg.name] = lg.entry()
     return index_bytes(index)
 
 
@@ -219,7 +227,7 @@ def served_index(base: str, built: list[League], attempts: int = 6, wait: float 
     takes a moment to reach every edge."""
     for attempt in range(attempts):
         index = json.loads(fetch(f"{base}/{INDEX}"))
-        stale = [lg.name for lg in built if index.get(lg.game, {}).get(lg.name) != {"version": lg.version, "dataset": lg.dataset, "art": lg.art}]
+        stale = [lg.name for lg in built if index.get(lg.game, {}).get(lg.name) != lg.entry()]
         if not stale:
             return index
         if attempt < attempts - 1:
@@ -239,18 +247,21 @@ def verify(base: str, built: list[League], log=print) -> int:
             if names and name not in names:
                 continue
             dataset = fetch(f"{base}/manifests/{e['dataset']}.json")
-            if json.loads(dataset)["id"] != e["dataset"]:
+            m = json.loads(dataset)
+            if m["id"] != e["dataset"]:
                 raise Invalid(f"{game} {name}: manifests/{e['dataset']}.json has another id")
+            if e.get("format") != m["format"]:
+                raise Invalid(f"{game} {name}: index names format {e.get('format')}, manifests/{e['dataset']}.json has {m['format']}")
             art = fetch(f"{base}/manifests/{e['art']}.json")
             if hashlib.sha256(art).hexdigest() != e["art"]:
                 raise Invalid(f"{game} {name}: manifests/{e['art']}.json differs from its SHA-256")
-            files = json.loads(dataset)["files"] + json.loads(art)["files"]
+            files = m["files"] + json.loads(art)["files"]
             for f in files:
                 body = fetch(f"{base}/blobs/{f['sha256']}")
                 if hashlib.sha256(body).hexdigest() != f["sha256"] or len(body) != f["size"]:
                     raise Invalid(f"{game} {name}: blobs/{f['sha256']} ({f['name']}) does not match")
             checked += len(files)
-            log(f"{game} {name}: {e['version']}, dataset {e['dataset']}, art {e['art']}: {len(files)} files match")
+            log(f"{game} {name}: {e['version']}, format {e['format']}, dataset {e['dataset']}, art {e['art']}: {len(files)} files match")
     if not checked:
         raise Invalid(f"{base}/{INDEX} names no leagues")
     return checked
@@ -267,7 +278,7 @@ def main(argv: list[str]) -> int:
             return 0
         built = leagues(Path(arg))
         for lg in built:
-            print(f"{lg.game} {lg.name}: {lg.version}, dataset {lg.dataset}, art {lg.art}, {len(lg.blobs)} files")
+            print(f"{lg.game} {lg.name}: {lg.version}, format {lg.format}, dataset {lg.dataset}, art {lg.art}, {len(lg.blobs)} files")
         if cmd == "publish":
             env = os.environ
             bucket = R2(env["R2_ACCOUNT_ID"], env["R2_ACCESS_KEY_ID"], env["R2_SECRET_ACCESS_KEY"], env["R2_BUCKET"])
