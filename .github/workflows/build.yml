@@ -233,7 +233,9 @@ jobs:
       # Also after a failed step, so a build that fails still lists what it warned about.
       - name: Warnings
         if: ${{ !cancelled() }}
-        run: echo "pbt-extract: warning: a warning added by hand to test this summary" >> "$RUNNER_TEMP/extract.log" && python3 -I scripts/extract_warnings.py "$LEAGUE" "$RUNNER_TEMP/extract.log" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "pbt-extract: warning: a warning added by hand to test this summary" >> "$RUNNER_TEMP/extract.log"
+          python3 -I scripts/extract_warnings.py "$LEAGUE" "$RUNNER_TEMP/extract.log" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check
         run: python3 -I scripts/bucket.py check "$RUNNER_TEMP/out"
