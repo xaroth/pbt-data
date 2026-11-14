@@ -235,7 +235,6 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: |
-          echo "pbt-extract: warning: a warning added by hand to test this summary" >> "$RUNNER_TEMP/extract.log"
           python3 -I scripts/extract_warnings.py "$LEAGUE" "$RUNNER_TEMP/extract.log" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Check
