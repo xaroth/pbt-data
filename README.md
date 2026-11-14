@@ -75,6 +75,8 @@ The `build` workflow builds each league's dataset and art from `source.json`, th
 
 Per league it downloads the bundles a build reads: from the CDN (`patch.poecdn.com/<version>/`, no login) when it still serves the version, which it does only for the live patch; otherwise, or when a CDN download fails partway, from Steam (depot manifest `steamManifest`, with the build account's secrets). It then builds `schema.json` at `datSchemaCommit`, fetches the tree export (its JSON and `assets/`) at `treeExportCommit` and runs pbt-extract, which writes the dataset and the art. The bundles it downloads include the game's UI art the class faces are cut from.
 
+Each league's job summary lists pbt-extract's warnings (`scripts/extract_warnings.py`): a table of each kind with its count, where warnings that differ only in the item they name count as one kind, and the full list below it. Content pbt-extract leaves out, such as removed item bases or mods no kept base rolls, shows there with its count before a merge publishes it. A warning does not fail the build.
+
 ## Detect
 
 The `detect` workflow runs hourly (and by hand with `gh workflow run detect.yml`). `scripts/detect.py` compares the latest game version ([latest-patch-version](https://github.com/poe-tool-dev/latest-patch-version)) and Steam's public manifest (anonymous app info, no account) with the recipes and the league's open `detect/poe1-<league>` pull request:

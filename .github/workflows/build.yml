@@ -212,14 +212,28 @@ jobs:
               ;;
           esac
 
+      # pbt-extract's stderr goes to the log and to extract.log for the warnings step; bash's
+      # pipefail keeps its exit status.
+      # pbt-extract's stderr goes to the log and to extract.log, which the warnings step reads.
+      # Explicit bash adds pipefail, so a failed extract is not hidden by tee.
       - name: Dataset
+        shell: bash
         run: |
-          pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" -version "$version" dataset "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE"
+          { pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" -version "$version" dataset "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE" \
+            2>&1 >&3 3>&- | tee -a "$RUNNER_TEMP/extract.log" >&2; } 3>&1
           id=$(jq -r .id "$RUNNER_TEMP/out/$LEAGUE/manifest.json")
           echo "$LEAGUE: $version from $fetched, id \`$id\`" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Art
-        run: pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" art "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE/art"
+        shell: bash
+        run: |
+          { pbt-extract -ooz "$RUNNER_TEMP/ooz/ooz" art "$RUNNER_TEMP/in" "$RUNNER_TEMP/out/$LEAGUE/art" \
+            2>&1 >&3 3>&- | tee -a "$RUNNER_TEMP/extract.log" >&2; } 3>&1
+
+      # Also after a failed step, so a build that fails still lists what it warned about.
+      - name: Warnings
+        if: ${{ !cancelled() }}
+        run: python3 -I scripts/extract_warnings.py "$LEAGUE" "$RUNNER_TEMP/extract.log" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check
         run: python3 -I scripts/bucket.py check "$RUNNER_TEMP/out"
