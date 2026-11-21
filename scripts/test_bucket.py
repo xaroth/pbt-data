@@ -85,6 +85,11 @@ class PublishTest(unittest.TestCase):
         self.assertEqual(index["poe1"]["3.28"]["dataset"], "id-3.28")
 
 
+class ContentTypeTest(unittest.TestCase):
+    def test_jpg_is_image_jpeg(self):
+        self.assertEqual(bucket.content_type("skills-0.jpg"), "image/jpeg")
+
+
 class VerifyTest(unittest.TestCase):
     def setUp(self):
         tmp = Path(tempfile.mkdtemp())
