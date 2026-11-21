@@ -40,7 +40,12 @@ from typing import Protocol
 
 INDEX = "index.json"
 IMMUTABLE = "public, max-age=31536000, immutable"
-CONTENT_TYPES = {".png": "image/png", ".webp": "image/webp", ".json": "application/json"}
+CONTENT_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".webp": "image/webp",
+    ".json": "application/json",
+}
 
 
 class Invalid(Exception):
