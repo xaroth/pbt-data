@@ -34,7 +34,7 @@ concurrency:
 
 env:
   # Bump to rebuild every league with a newer extractor.
-  PBT_EXTRACT: 53310e96a18db739e47c325a1f947fa0b24f3328
+  PBT_EXTRACT: b8b9e2a2e0975d809dc1970f2cb6de48d749d86a
   OOZ: ff5aeb9e45e362e8d6bb1199aa82406285dd2a18
   DEPOT_DOWNLOADER: DepotDownloader_3.4.0
   STEAM_APP: "238960"
